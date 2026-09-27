@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+build/
+dist/
+venv/
+.venv/
+
+# 工具运行时产生的文件（含本地路径，不上传）
+mapper_config.json
+崩溃日志.txt
+*.log
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini

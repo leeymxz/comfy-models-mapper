@@ -1,0 +1,8 @@
+# .bat 是 GBK 编码 + CRLF，禁止 git 做任何换行转换，否则双击会闪退
+*.bat -text
+*.cmd -text
+
+# 源码统一用 LF 存储
+*.py text eol=lf
+*.md text eol=lf
+*.png binary
