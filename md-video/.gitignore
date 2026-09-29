@@ -1,0 +1,3 @@
+# 中间产物（可由 tts.py 重新生成，不入库）
+build/
+frames/

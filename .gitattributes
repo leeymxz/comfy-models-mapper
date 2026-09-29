@@ -6,3 +6,7 @@
 *.py text eol=lf
 *.md text eol=lf
 *.png binary
+*.ico binary
+*.mp4 binary
+*.mp3 binary
+*.wav binary

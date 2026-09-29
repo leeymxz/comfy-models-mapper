@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="logo/png/banner-1280.png" alt="ComfyUI 模型目录映射工具" width="640">
+</div>
+
 # ComfyUI 模型目录映射工具
 
 把多个 ComfyUI 整合包的 `models` 目录，统一映射到**一份真实的模型仓库**，
@@ -171,6 +175,31 @@ Junction 要求目标在本地 NTFS 卷上。网络盘请改用符号链接（`/
 
 **Q：双击闪退，什么都没看到？**
 先跑 `环境诊断.bat`。若目录下出现 `崩溃日志.txt`，里面有完整堆栈。
+
+---
+
+## 品牌资源（Logo）
+
+设计概念：**三个圆（多个 ComfyUI 整合包）→ 汇聚到一个文件夹（唯一的模型仓库）**。
+
+| 文件 | 用途 |
+| --- | --- |
+| `logo/icon.svg` | 主图标源文件（512×512，蓝色渐变底板） |
+| `logo/icon-mono.svg` | 单色版，用 `currentColor`，自动适配深浅背景 |
+| `logo/logo-horizontal.svg` | 横向组合：图标 + 中英文标题 |
+| `logo/logo-horizontal-light.svg` | 深色背景用的白色文字版 |
+| `logo/banner.svg` | 1280×640 社交分享横幅 |
+| `logo/png/icon-1024.png` 等 | 已导出 1024 / 512 / 256 / 128 / 64 / 32 六档 |
+| `logo/png/icon.ico` | Windows 应用图标（16~256 七档，内嵌 PNG） |
+| `logo/_export.js` | SVG → PNG 批量导出脚本；`logo/_makeico.py` 生成 ico |
+
+修改后重新导出：
+
+```bat
+cd logo
+node _export.js
+python _makeico.py
+```
 
 ---
 

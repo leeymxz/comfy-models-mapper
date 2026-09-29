@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"
+     role="img" aria-label="ComfyUI 模型目录映射工具">
+  <title>ComfyUI 模型目录映射工具（单色版）</title>
+  <!-- 单色版：无底板，图形用 currentColor，可自适应深浅背景 -->
+
+  <g fill="none" stroke="currentColor" stroke-width="14" stroke-linecap="round">
+    <path d="M120 176 C 120 228 168 250 236 268"/>
+    <path d="M256 118 L 256 268"/>
+    <path d="M392 176 C 392 228 344 250 276 268"/>
+  </g>
+
+  <g fill="currentColor">
+    <circle cx="120" cy="138" r="38"/>
+    <circle cx="256" cy="86"  r="38"/>
+    <circle cx="392" cy="138" r="38"/>
+  </g>
+
+  <path fill="currentColor" d="M146 222 h84 a16 16 0 0 1 16 16 v14 h114 a20 20 0 0 1 20 20
+                               v112 a20 20 0 0 1 -20 20 H146 a20 20 0 0 1 -20 -20 V242
+                               a20 20 0 0 1 20 -20 z"/>
+</svg>

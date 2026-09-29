@@ -1,0 +1,147 @@
+{
+  "lead": 2.2,
+  "breathe": 0.55,
+  "total": 183.516,
+  "shots": [
+    {
+      "id": "title",
+      "type": "title",
+      "label": "开场",
+      "narration": "今天介绍一个小工具，让你的多个 ComfyUI 整合包，共用同一份模型仓库。",
+      "audio": "audio/title.mp3",
+      "start": 2.2,
+      "dur": 5.616,
+      "end": 7.816
+    },
+    {
+      "id": "problem",
+      "type": "problem",
+      "label": "痛点",
+      "narration": "如果你装了多个 ComfyUI 整合包，一定遇到过这个麻烦：每个包里都有一个独立的 models 目录。同一个模型，想在各个包里都能用，就得复制好几份。几百 GB 的硬盘，很快就见底了。",
+      "audio": "audio/problem.mp3",
+      "start": 8.366,
+      "dur": 13.824,
+      "end": 22.19
+    },
+    {
+      "id": "concept",
+      "type": "concept",
+      "label": "目录联接",
+      "narration": "解决办法是目录联接。它可以让一个目录，指向另一个真实存在的目录。对程序来说，这就是一个普通的文件夹，能读能写；但在硬盘上，数据只有一份。",
+      "audio": "audio/concept.mp3",
+      "start": 22.74,
+      "dur": 12.888,
+      "end": 35.628
+    },
+    {
+      "id": "intro",
+      "type": "intro",
+      "label": "工具介绍",
+      "narration": "这个工具就是干这件事的。它把每个整合包的 models 目录，统一链接到你的模型仓库。用的是目录联接，不需要管理员权限，也不会改动你的模型文件。",
+      "audio": "audio/intro.mp3",
+      "start": 36.178,
+      "dur": 12.408,
+      "end": 48.586
+    },
+    {
+      "id": "safety",
+      "type": "safety",
+      "label": "安全机制",
+      "narration": "先说安全机制，这一点最重要。工具只创建和删除链接本身，不移动、不复制、不删除任何模型数据。如果目标目录不是空的，它会自动改名备份，而不是删除，随时可以还原。",
+      "audio": "audio/safety.mp3",
+      "start": 49.136,
+      "dur": 15.408,
+      "end": 64.544
+    },
+    {
+      "id": "launch",
+      "type": "launch",
+      "label": "启动工具",
+      "narration": "开始使用。需要 Python 3.8 以上版本，安装时勾选 tkinter。双击启动工具即可打开。如果双击闪退，可以先运行环境诊断脚本，它会告诉你缺什么。",
+      "audio": "audio/launch.mp3",
+      "start": 65.094,
+      "dur": 13.752,
+      "end": 78.846
+    },
+    {
+      "id": "app-repo",
+      "type": "app-repo",
+      "label": "第一步 选仓库",
+      "narration": "第一步，选择模型仓库目录，也就是真实存放模型的那个文件夹。点检测信息，可以看到子目录数量、文件数量和总大小。这里显示的是八百多 GB 的真实模型库。",
+      "audio": "audio/app-repo.mp3",
+      "start": 79.396,
+      "dur": 14.016,
+      "end": 93.412
+    },
+    {
+      "id": "app-scan",
+      "type": "app-scan",
+      "label": "第二步 扫描目录",
+      "narration": "第二步，添加要映射的 ComfyUI 安装目录。点自动扫描各盘，工具会自动找出所有整合包，也可以手动添加。你只要选到根目录，工具会自动补到 ComfyUI 这一层。",
+      "audio": "audio/app-scan.mp3",
+      "start": 93.962,
+      "dur": 13.416,
+      "end": 107.378
+    },
+    {
+      "id": "app-list",
+      "type": "app-list",
+      "label": "查看状态",
+      "narration": "列表会显示每个目录的当前状态：是真实目录、已经映射、还是不存在。如果已经是链接，还会显示它指向哪里。单击启用列，勾选你要生效的项目。",
+      "audio": "audio/app-list.mp3",
+      "start": 107.928,
+      "dur": 13.344,
+      "end": 121.272
+    },
+    {
+      "id": "app-confirm",
+      "type": "app-confirm",
+      "label": "确认清单",
+      "narration": "第三步，点开始映射。工具会先弹出操作清单，明确告诉你每一项要做什么：是新建链接、替换空目录，还是改名备份后再建立。确认之后才会执行。",
+      "audio": "audio/app-confirm.mp3",
+      "start": 121.822,
+      "dur": 13.704,
+      "end": 135.526
+    },
+    {
+      "id": "app-result",
+      "type": "app-result",
+      "label": "映射完成",
+      "narration": "执行完成后，状态会变成已映射，并显示实际指向的位置。整个过程只花几秒，因为没有任何文件被移动。重启 ComfyUI，就能看到模型了。",
+      "audio": "audio/app-result.mp3",
+      "start": 136.076,
+      "dur": 11.928,
+      "end": 148.004
+    },
+    {
+      "id": "app-restore",
+      "type": "app-restore",
+      "label": "还原与解除",
+      "narration": "如果想恢复原样，勾选之后点一键还原备份，链接会被删除，原来的目录会改回来。也可以单独点解除映射，只删除链接，不动仓库里的模型。",
+      "audio": "audio/app-restore.mp3",
+      "start": 148.554,
+      "dur": 12.168,
+      "end": 160.722
+    },
+    {
+      "id": "tech",
+      "type": "tech",
+      "label": "为什么用 J 参数",
+      "narration": "补充一个技术细节。很多人第一反应是用 mklink 的 D 参数创建符号链接，但那通常需要管理员权限。工具用的是 J 参数创建目录联接，普通权限就能建，效果完全一样。",
+      "audio": "audio/tech.mp3",
+      "start": 161.272,
+      "dur": 14.184,
+      "end": 175.456
+    },
+    {
+      "id": "outro",
+      "type": "outro",
+      "label": "结尾",
+      "narration": "项目已经在 GitHub 开源，搜索 leeymxz 就能找到。如果对你有帮助，欢迎点个星星。",
+      "audio": "audio/outro.mp3",
+      "start": 176.006,
+      "dur": 6.96,
+      "end": 182.966
+    }
+  ]
+}

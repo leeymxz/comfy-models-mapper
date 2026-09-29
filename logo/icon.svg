@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"
+     role="img" aria-label="ComfyUI 模型目录映射工具">
+  <title>ComfyUI 模型目录映射工具</title>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"   stop-color="#3aa0f0"/>
+      <stop offset="0.55" stop-color="#0078d4"/>
+      <stop offset="1"   stop-color="#00539c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 底板 -->
+  <rect width="512" height="512" rx="112" fill="url(#tile)"/>
+
+  <!-- 联接：三个整合包 -> 一个模型仓库 -->
+  <g fill="none" stroke="#ffffff" stroke-width="13" stroke-linecap="round" opacity="0.92">
+    <path d="M128 184 C 128 232 172 252 236 268"/>
+    <path d="M256 138 L 256 268"/>
+    <path d="M384 184 C 384 232 340 252 276 268"/>
+  </g>
+
+  <!-- 三个 ComfyUI 整合包 -->
+  <g fill="#ffffff">
+    <circle cx="128" cy="150" r="34"/>
+    <circle cx="256" cy="104" r="34"/>
+    <circle cx="384" cy="150" r="34"/>
+  </g>
+
+  <!-- 唯一的模型仓库（文件夹） -->
+  <path fill="#ffffff" d="M150 222 h84 a16 16 0 0 1 16 16 v14 h112 a18 18 0 0 1 18 18
+                          v112 a18 18 0 0 1 -18 18 H150 a18 18 0 0 1 -18 -18 V240
+                          a18 18 0 0 1 18 -18 z"/>
+</svg>
