@@ -47,13 +47,42 @@ ComfyUI 不需要任何额外配置。
 
 > 也可以直接跑源码：`python comfy_models_mapper.py`
 
-### 双击没反应 / 闪退？
+### 双击没反应 / 闪退 / 报 9009？
 
-先双击 **`环境诊断.bat`**，它会打印 Python 位置、tkinter 是否可用、能否正常导入工具。
+**第一步永远是：双击 `环境诊断.bat`。** 它会列出机器上所有能找到的 Python，
+逐个实测"能不能跑 + 带不带 tkinter"，并把结果同时写进 `环境诊断.log`。
 
-若仍然闪退，检查目录下是否生成了 **`崩溃日志.txt`**，里面有完整报错堆栈。
+启动脚本（`启动工具.bat`）本身也带同样的探测逻辑，会把尝试过程记到 `启动诊断.log`。
 
-常见原因：没装 Python，或安装时**没勾选 tcl/tk**。
+常见原因：
+- 没装 Python，或安装时**没勾选 tcl/tk and IDLE**
+- 选到了**微软商店的 `python.exe` 空壳**——见下方条目
+
+若目录下生成了 `崩溃日志.txt`，里面有完整报错堆栈。
+
+### 退出码 9009 是什么？
+
+9009 是 Windows 的"命令未找到"。最常见的原因是启动脚本选到了微软商店的
+**应用执行别名**：`%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe`。
+它是个转发代理，在批处理里被调用会直接返回 9009。
+
+`启动工具.bat` 会**主动跳过任何位于 `WindowsApps` 目录下的候选**，
+并且每个候选都要先跑一次 `-c "import tkinter"` 验证通过才会采用，所以正常情况下不会踩到。
+
+真遇到了，任选一条：
+
+1. 去 [python.org](https://www.python.org/downloads/windows/) 装一个 Python 3.8+，
+   安装时勾选 `Add python.exe to PATH` 和 `tcl/tk and IDLE`；
+2. 打开 **设置 → 应用 → 高级应用设置 → 应用执行别名**，
+   把 `python.exe` / `python3.exe` 两个开关关掉；
+3. 上**逃生舱**：把你确认可用的 `python.exe` 完整路径单独写成一行，
+   存成工具目录下的 `python路径.txt`，启动脚本会优先使用它。
+
+```text
+# python路径.txt 内容示例（只写一行，不要引号）
+C:\Python314\python.exe
+```
+
 
 ---
 
@@ -127,7 +156,12 @@ comfy-models-mapper/
 ├─ 启动工具.bat              双击启动（GBK 编码，勿改编码）
 ├─ 环境诊断.bat              出问题时先跑这个
 ├─ screenshot.png           界面预览
+├─ logo/                    图标与横幅（SVG 源文件 + PNG 导出）
+├─ md-video/                教程视频工程与成片
 ├─ mapper_config.json       首次保存后生成的配置（已 gitignore）
+├─ 启动诊断.log             启动脚本的解释器探测记录（已 gitignore）
+├─ 环境诊断.log             诊断报告（已 gitignore）
+├─ python路径.txt           手动指定解释器，可选逃生舱（已 gitignore）
 └─ tests/
    ├─ _selftest.py          底层能力自测（10 项）
    ├─ _e2e.py               端到端演练（映射 → 解除 → 还原）
@@ -175,6 +209,10 @@ Junction 要求目标在本地 NTFS 卷上。网络盘请改用符号链接（`/
 
 **Q：双击闪退，什么都没看到？**
 先跑 `环境诊断.bat`。若目录下出现 `崩溃日志.txt`，里面有完整堆栈。
+
+**Q：报"退出码 9009"？**
+多半是选到了微软商店的 `python.exe` 空壳。见上方
+[退出码 9009 是什么？](#退出码-9009-是什么)。
 
 ---
 

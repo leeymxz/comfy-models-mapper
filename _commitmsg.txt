@@ -1,0 +1,28 @@
+修复启动脚本选到微软商店 python.exe 导致 9009
+
+原因：`where python` 可能返回
+%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe（微软商店的应用执行别名），
+它在批处理里被调用会直接返回 9009（命令未找到）。
+
+启动器重写（启动工具.bat）：
+- 七路候选来源按序尝试：内置 python\ 目录 → python路径.txt 手动指定 →
+  py 启动器 → 注册表 InstallPath → 各盘 Python3* 目录扫描 → where → 商店代理兜底
+- 每个候选都必须实测跑通 `-c "import tkinter"` 才会被采用，第一个通过者胜出
+- 主动跳过任何位于 WindowsApps 下的候选（仅作最后兜底）
+- 优先选同目录的 pythonw.exe，避免多留一个黑窗口
+- 探测过程写入 启动诊断.log
+- 新增 9009 专属提示，直接给出三条可操作解法
+- 新增逃生舱：同目录 python路径.txt 可手动指定解释器
+
+环境诊断.bat 重写：
+- 新增 [5] 商店代理检测、[6] 逐个实测候选解释器、[7] py 启动器登记版本
+- 报告同时写入 环境诊断.log
+
+验证：
+- 干跑解析到 C:\Python314\pythonw.exe（实测 tkinter 通过）
+- NOPYTHON / 商店代理跳过 / 9009 三个失败分支均正常
+- tests/_battest.py 确认能拉起 GUI（新 pythonw PID 出现）
+- tests/_selftest.py 10 项全过
+
+文档：README 新增「退出码 9009 是什么？」章节与 FAQ，目录结构更新；
+.gitignore 补充 python路径.txt 与 python/。

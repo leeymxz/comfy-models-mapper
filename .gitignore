@@ -11,6 +11,8 @@ venv/
 # 工具运行时产生的文件（含本地路径，不上传）
 mapper_config.json
 崩溃日志.txt
+python路径.txt
+python/
 *.log
 
 # 编辑器 / 系统
