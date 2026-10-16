@@ -12,6 +12,7 @@ venv/
 mapper_config.json
 崩溃日志.txt
 python路径.txt
+整理清单_*.json
 python/
 *.log
 

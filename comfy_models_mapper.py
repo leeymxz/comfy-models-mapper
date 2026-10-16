@@ -19,6 +19,7 @@ import sys
 import json
 import time
 import shutil
+import hashlib
 import subprocess
 import threading
 import ctypes
@@ -27,7 +28,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 APP_TITLE = "ComfyUI 模型目录映射工具"
-APP_VER = "v1.0"
+APP_VER = "v1.1"
 CONFIG_NAME = "mapper_config.json"
 
 FILE_ATTRIBUTE_REPARSE_POINT = 0x400
@@ -318,6 +319,8 @@ class MapperApp:
         ttk.Separator(btn_frame, orient="vertical").pack(side="left", fill="y", padx=8)
         ttk.Button(btn_frame, text="保存配置", command=self.save_config).pack(side="left")
         ttk.Button(btn_frame, text="导出日志", command=self.export_log).pack(side="left", padx=6)
+        ttk.Separator(btn_frame, orient="vertical").pack(side="left", fill="y", padx=8)
+        ttk.Button(btn_frame, text="🗂 整理入库 / 查重", command=self.open_tools).pack(side="left")
 
         # ---- 日志 ----
         log_frame = ttk.LabelFrame(self.root, text=" 运行日志 ")
@@ -937,6 +940,10 @@ class MapperApp:
                 self.inspect_repo()
                 break
 
+    # ---------- 整理入库 / 查重 ----------
+    def open_tools(self):
+        ToolsWindow(self, self.root)
+
     # ---------- 导出日志 ----------
     def export_log(self):
         if not self.log_lines:
@@ -959,6 +966,759 @@ class MapperApp:
             self.log(f"日志已导出：{p}", "ok")
         except Exception as e:
             messagebox.showerror("导出失败", str(e))
+
+
+# ==================== 模型扫描 / 整理入库 / 查重 ====================
+
+# ComfyUI 常见的模型与附带文件格式
+MODEL_EXTS = {
+    ".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".sft", ".gguf", ".onnx",
+    ".pkl", ".th", ".npz", ".npy", ".h5", ".msgpack", ".clip", ".vae",
+    ".zip", ".tar", ".7z", ".rar", ".engine", ".trt", ".om", ".param",
+    ".model", ".pb", ".tflite", ".mlmodel", ".caffemodel", ".weights",
+    ".yaml", ".yml", ".json", ".txt", ".md", ".toml", ".cfg",
+}
+
+SAMPLE = 1 * 1024 * 1024          # 采样块 1MB（头/中/尾各一块）
+HASH_CHUNK = 8 * 1024 * 1024      # 全量哈希分块
+
+
+def iter_model_files(models_dir, pack_label="", models_only=True, stop=None):
+    """遍历一个 models 目录，产出文件信息。
+
+    不跟随链接（已映射成 Junction 的目录直接跳过），避免把仓库重复算一遍；
+    跳过 *_backup_* / *_linkbak_* 这些本工具自己产生的遗留目录。
+    注意：传入的根目录本身如果就是链接，直接返回空——否则会把仓库遍历第二遍。
+    """
+    if is_reparse_point(models_dir):
+        return
+    base = os.path.normpath(models_dir)
+    stack = [base]
+    while stack:
+        if stop is not None and stop.is_set():
+            return
+        d = stack.pop()
+        try:
+            with os.scandir(d) as it:
+                for e in it:
+                    try:
+                        if e.is_dir(follow_symlinks=False):
+                            if is_reparse_point(e.path):
+                                continue
+                            nm = e.name.lower()
+                            if "_backup_" in nm or "_linkbak_" in nm:
+                                continue
+                            stack.append(e.path)
+                        elif e.is_file(follow_symlinks=False):
+                            if models_only and os.path.splitext(e.name)[1].lower() not in MODEL_EXTS:
+                                continue
+                            st = e.stat(follow_symlinks=False)
+                            if st.st_size <= 0:
+                                continue
+                            yield {
+                                "path": e.path,
+                                "rel": os.path.relpath(e.path, base),
+                                "size": st.st_size,
+                                "mtime": int(st.st_mtime),
+                                "pack": pack_label or base,
+                            }
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+
+
+def sample_fingerprint(path: str, size: int):
+    """采样指纹：头 SAMPLE + 中 SAMPLE + 尾 SAMPLE；小文件直接读全文。
+
+    相比全量 sha256（几百 GB 模型要跑几小时），每个文件只读约 3MB，
+    速度快两个数量级，且几乎不会误判——内容相同的副本指纹必然相同。
+    """
+    h = hashlib.sha256()
+    try:
+        with open(path, "rb") as f:
+            if size <= SAMPLE * 3:
+                h.update(f.read(size))
+            else:
+                h.update(f.read(SAMPLE))
+                f.seek(size // 2)
+                h.update(f.read(SAMPLE))
+                f.seek(size - SAMPLE)
+                h.update(f.read(SAMPLE))
+    except OSError:
+        return None
+    return h.hexdigest()
+
+
+def full_md5(path: str):
+    """全量 MD5。用于对采样指纹命中的副本做最终复核（慢，但零误判）。"""
+    h = hashlib.md5()
+    try:
+        with open(path, "rb") as f:
+            while True:
+                b = f.read(HASH_CHUNK)
+                if not b:
+                    break
+                h.update(b)
+    except OSError:
+        return None
+    return h.hexdigest()
+
+
+def find_duplicate_groups(files, verify_full=False):
+    """按 大小分组 → 组内采样指纹比对，返回重复分组列表。
+
+    每个分组: {"files":[...], "keep":路径, "size":字节, "waste":可释放字节}
+    """
+    by_size = {}
+    for it in files:
+        by_size.setdefault(it["size"], []).append(it)
+
+    groups = []
+    for size, items in by_size.items():
+        if len(items) < 2:
+            continue
+        buckets = {}
+        for it in items:
+            fp = sample_fingerprint(it["path"], size)
+            if fp:
+                it["fp"] = fp
+                buckets.setdefault(fp, []).append(it)
+        for fp, same in buckets.items():
+            if len(same) < 2:
+                continue
+            if verify_full:
+                # 复核：全量 MD5 全一致才算真重复
+                md5s = {p: full_md5(p) for p in (x["path"] for x in same)}
+                by_md5 = {}
+                for x in same:
+                    m = md5s.get(x["path"])
+                    if m:
+                        x["md5"] = m
+                        by_md5.setdefault(m, []).append(x)
+                same = [g for g in by_md5.values() if len(g) > 1]
+                for g in same:
+                    groups.append(make_group(g, size))
+                continue
+            groups.append(make_group(same, size))
+
+    groups.sort(key=lambda g: -g["waste"])
+    return groups
+
+
+def make_group(same, size):
+    """把一组同指纹文件整理成标准分组结构，并挑出建议保留的那个。"""
+    # 建议保留：最近修改 > 路径最短（短路径通常更"正统"）
+    same.sort(key=lambda x: (x.get("mtime") or 0, -len(x.get("path") or "")), reverse=True)
+    keep = same[0]
+    return {
+        "files": same,
+        "keep": keep["path"],
+        "keep_rel": keep.get("rel") or os.path.basename(keep["path"]),
+        "size": size,
+        "waste": size * (len(same) - 1),
+    }
+
+
+def _fp_of(it):
+    """取（或现算）文件指纹，避免同一个文件被反复读盘。"""
+    fp = it.get("fp")
+    if not fp:
+        fp = sample_fingerprint(it["path"], it["size"])
+        it["fp"] = fp
+    return fp
+
+
+def plan_consolidation(packs, repo, models_only=True, stop=None):
+    """规划"整理入库"。
+
+    packs: [(models_dir, 显示名), ...]
+    返回 (moves, dups, conflicts)：
+      moves      —— 仓库里没有，需要搬进去的
+      dups       —— 仓库里已有一份完全相同的，整合包里的副本属于冗余
+      conflicts  —— 同名但内容不同，必须人工确认，绝不动
+    """
+    repo = os.path.normpath(repo)
+    repo_index = {}
+    for it in iter_model_files(repo, models_only=models_only, stop=stop):
+        repo_index.setdefault(os.path.normcase(it["rel"]), []).append(it)
+
+    moves, dups, conflicts = [], [], []
+    for models_dir, label in packs:
+        for it in iter_model_files(models_dir, pack_label=label,
+                                   models_only=models_only, stop=stop):
+            key = os.path.normcase(it["rel"])
+            dst = os.path.join(repo, it["rel"])
+            existing = repo_index.get(key)
+            if not existing:
+                rec = dict(it)
+                rec.update({"dst": dst, "action": "move"})
+                moves.append(rec)
+                # 登记进索引时把路径记成【目标路径】并带上指纹——这个文件马上就会被
+                # 搬进仓库，后面别的整合包再出现同样内容，对照的应该是仓库里的那一份。
+                repo_index.setdefault(key, []).append(
+                    dict(it, path=dst, fp=_fp_of(it)))
+                continue
+            hit = next((e for e in existing if e["size"] == it["size"]), None)
+            if hit and _fp_of(hit) and _fp_of(hit) == _fp_of(it):
+                rec = dict(it)
+                rec.update({"dst": dst, "action": "dup", "twin": hit["path"]})
+                dups.append(rec)
+            else:
+                rec = dict(it)
+                rec.update({"dst": dst, "action": "conflict"})
+                conflicts.append(rec)
+    return moves, dups, conflicts
+
+
+# ==================== 整理入库 / 查重 窗口 ====================
+
+class ToolsWindow:
+    """「整理入库」+「模型查重」工具箱（从主界面打开）。"""
+
+    def __init__(self, app, parent):
+        self.app = app
+        self.win = tk.Toplevel(parent)
+        self.win.title(f"{APP_TITLE} {APP_VER} — 整理入库 / 模型查重")
+        self.win.geometry("1180x760")
+        self.win.minsize(960, 620)
+        self.win.transient(parent)
+
+        self.stop_evt = threading.Event()
+        self.busy = False
+
+        self.dup_records = []      # 查重结果（可变，勾选态跟着变）
+        self.move_records = []     # 整理结果
+
+        self._build()
+
+    # ---------- 界面 ----------
+    def _build(self):
+        pad = {"padx": 10, "pady": 6}
+
+        nb = ttk.Notebook(self.win)
+        nb.pack(fill="both", expand=True, **pad)
+
+        self.tab_org = ttk.Frame(nb)
+        self.tab_dup = ttk.Frame(nb)
+        nb.add(self.tab_org, text="  🗂 整理入库  ")
+        nb.add(self.tab_dup, text="  🔍 模型查重  ")
+
+        self._build_org(self.tab_org)
+        self._build_dup(self.tab_dup)
+
+        # 底部：进度 + 状态
+        bottom = ttk.Frame(self.win)
+        bottom.pack(fill="x", side="bottom", padx=10, pady=(0, 10))
+        self.prog = ttk.Progressbar(bottom, mode="indeterminate", length=260)
+        self.prog.pack(side="left")
+        self.tools_status = tk.StringVar(value="就绪")
+        ttk.Label(bottom, textvariable=self.tools_status, anchor="w").pack(
+            side="left", fill="x", expand=True, padx=(10, 0))
+
+    # ---------- Tab1：整理入库 ----------
+    def _build_org(self, parent):
+        top = ttk.Frame(parent)
+        top.pack(fill="x", padx=8, pady=8)
+
+        ttk.Label(top, text="把各整合包里「仓库还没有」的模型搬进仓库，并识别出冗余副本。",
+                  foreground="#444").pack(side="left")
+        ttk.Button(top, text="🔍 扫描分析", command=self.scan_organize).pack(side="right")
+
+        opt = ttk.Frame(parent)
+        opt.pack(fill="x", padx=8)
+        self.var_models_only = tk.BooleanVar(value=True)
+        self.var_verify = tk.BooleanVar(value=False)
+        self.var_automap = tk.BooleanVar(value=True)
+        ttk.Checkbutton(opt, text="只处理常见模型格式（.safetensors/.ckpt/…）",
+                        variable=self.var_models_only).pack(side="left")
+        ttk.Checkbutton(opt, text="对重复副本做全量 MD5 复核（更慢，零误判）",
+                        variable=self.var_verify).pack(side="left", padx=(14, 0))
+        ttk.Checkbutton(opt, text="整理后自动把该整合包映射到仓库",
+                        variable=self.var_automap).pack(side="left", padx=(14, 0))
+
+        cols = ("on", "rel", "size", "pack", "action", "dst")
+        self.org_tree = ttk.Treeview(parent, columns=cols, show="headings", height=16)
+        for c, t, w in (("on", "选", 40), ("rel", "相对路径", 280),
+                        ("size", "大小", 90), ("pack", "来源整合包", 210),
+                        ("action", "动作", 130), ("dst", "仓库目标", 330)):
+            self.org_tree.heading(c, text=t)
+            self.org_tree.column(c, width=w, anchor="w",
+                                 stretch=False if c != "rel" else True)
+        self.org_tree.pack(fill="both", expand=True, padx=8, pady=(6, 4))
+        self.org_tree.bind("<Button-1>", lambda e: self._toggle_row(self.org_tree, e, "on"))
+
+        bar = ttk.Frame(parent)
+        bar.pack(fill="x", padx=8, pady=(0, 8))
+        ttk.Button(bar, text="全选", command=lambda: self._select_all(self.org_tree, True)).pack(side="left")
+        ttk.Button(bar, text="全不选", command=lambda: self._select_all(self.org_tree, False)).pack(side="left", padx=4)
+        ttk.Button(bar, text="▶ 开始整理（勾选项）", command=self.run_organize).pack(side="left", padx=(14, 0))
+        ttk.Button(bar, text="取消扫描", command=self.cancel_scan).pack(side="left", padx=4)
+        self.org_summary = ttk.Label(bar, text="尚未扫描", foreground="#666")
+        self.org_summary.pack(side="right")
+
+    # ---------- Tab2：模型查重 ----------
+    def _build_dup(self, parent):
+        top = ttk.Frame(parent)
+        top.pack(fill="x", padx=8, pady=8)
+        ttk.Label(top, text="按大小分组，再对同大小文件做头/中/尾采样指纹比对，找出完全相同的副本。",
+                  foreground="#444").pack(side="left")
+        ttk.Button(top, text="🔍 开始扫描", command=self.scan_dupes).pack(side="right")
+
+        opt = ttk.Frame(parent)
+        opt.pack(fill="x", padx=8)
+        self.dup_models_only = tk.BooleanVar(value=True)
+        self.dup_verify = tk.BooleanVar(value=False)
+        ttk.Checkbutton(opt, text="只扫描常见模型格式", variable=self.dup_models_only).pack(side="left")
+        ttk.Checkbutton(opt, text="对每组做全量 MD5 复核（慢，零误判）",
+                        variable=self.dup_verify).pack(side="left", padx=(14, 0))
+
+        cols = ("on", "grp", "name", "size", "path", "mtime", "keep")
+        self.dup_tree = ttk.Treeview(parent, columns=cols, show="headings", height=16)
+        for c, t, w in (("on", "选", 40), ("grp", "组", 36), ("name", "文件名", 220),
+                        ("size", "大小", 90), ("path", "路径", 400),
+                        ("mtime", "修改时间", 140), ("keep", "建议", 60)):
+            self.dup_tree.heading(c, text=t)
+            self.dup_tree.column(c, width=w, anchor="w")
+        self.dup_tree.pack(fill="both", expand=True, padx=8, pady=(6, 4))
+        self.dup_tree.bind("<Button-1>", lambda e: self._toggle_row(self.dup_tree, e, "on"))
+
+        bar = ttk.Frame(parent)
+        bar.pack(fill="x", padx=8, pady=(0, 8))
+        ttk.Button(bar, text="全选", command=lambda: self._select_all(self.dup_tree, True)).pack(side="left")
+        ttk.Button(bar, text="全不选", command=lambda: self._select_all(self.dup_tree, False)).pack(side="left", padx=4)
+        ttk.Button(bar, text="🗑 删除选中副本", command=self.run_delete_dupes).pack(side="left", padx=(14, 0))
+        ttk.Button(bar, text="取消扫描", command=self.cancel_scan).pack(side="left", padx=4)
+        self.dup_summary = ttk.Label(bar, text="尚未扫描", foreground="#666")
+        self.dup_summary.pack(side="right")
+
+    # ---------- 通用小工具 ----------
+    def _toggle_row(self, tree, event, col):
+        if tree.identify_region(event.x, event.y) != "cell":
+            return
+        if tree.identify_column(event.x) != f"#{tree['columns'].index(col) + 1}":
+            return
+        row = tree.identify_row(event.y)
+        if not row:
+            return
+        vals = list(tree.item(row, "values"))
+        vals[0] = "☐" if vals[0] == "☑" else "☑"
+        tree.item(row, values=vals)
+
+    def _select_all(self, tree, val):
+        for iid in tree.get_children():
+            vals = list(tree.item(iid, "values"))
+            vals[0] = "☑" if val else "☐"
+            tree.item(iid, values=vals)
+
+    def set_busy(self, on):
+        self.busy = on
+        try:
+            if on:
+                self.prog.start(12)
+            else:
+                self.prog.stop()
+        except Exception:
+            pass
+
+    def cancel_scan(self):
+        if self.busy:
+            self.stop_evt.set()
+            self.tools_status.set("已请求取消，正在停止…")
+
+    def log(self, msg, level="info"):
+        self.app.log(msg, level)
+
+    # ---------- 扫描：整理入库 ----------
+    def scan_organize(self):
+        if self.busy:
+            return
+        repo = self.app.repo_var.get().strip().strip('"')
+        if not repo or not os.path.isdir(repo):
+            messagebox.showwarning("提示", "请先在主界面选择「模型仓库目录」")
+            return
+        if is_reparse_point(repo):
+            messagebox.showerror("提示", f"仓库目录本身是链接，请改选真实目录：\n{repo}")
+            return
+
+        packs = []
+        for t in self.app.targets:
+            if not t.get("enabled"):
+                continue
+            m = self.app.models_of(t["path"])
+            if not os.path.isdir(m):
+                continue
+            if is_reparse_point(m):
+                continue          # 已经映射过的，没有可整理的内容
+            packs.append((m, os.path.basename(os.path.dirname(m)) or t["path"]))
+        if not packs:
+            messagebox.showinfo("提示", "没有可扫描的整合包（未勾选，或它们的 models 已经映射过了）")
+            return
+
+        self.stop_evt.clear()
+        self.set_busy(True)
+        self.tools_status.set("正在扫描整合包…")
+        models_only = self.var_models_only.get()
+
+        def worker():
+            try:
+                moves, dups, conflicts = plan_consolidation(
+                    packs, repo, models_only=models_only, stop=self.stop_evt)
+                self.win.after(0, self._scan_organize_done, moves, dups, conflicts, len(packs))
+            except Exception as e:
+                self.win.after(0, self._scan_failed, e)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _scan_failed(self, e):
+        self.set_busy(False)
+        self.tools_status.set("扫描失败")
+        messagebox.showerror("扫描失败", str(e))
+
+    def _scan_organize_done(self, moves, dups, conflicts, npacks):
+        self.set_busy(False)
+        self.stop_evt.clear()
+        self.move_records = moves + dups + conflicts
+        for i in self.org_tree.get_children():
+            self.org_tree.delete(i)
+
+        ACTION = {"move": "→ 移动到仓库", "dup": "≡ 重复（可删副本）",
+                  "conflict": "⚠ 冲突（不动）"}
+        for r in self.move_records:
+            mark = "☑" if r["action"] != "conflict" else "☐"
+            self.org_tree.insert("", "end", values=(
+                mark, r["rel"], human_size(r["size"]), r["pack"],
+                ACTION[r["action"]], r["dst"]))
+
+        total = sum(r["size"] for r in moves)
+        dup_size = sum(r["size"] for r in dups)
+        self.org_summary.configure(
+            text=f"扫描 {npacks} 个整合包 ｜ 待移动 {len(moves)} 个（{human_size(total)}）"
+                 f" ｜ 冗余副本 {len(dups)} 个（{human_size(dup_size)}）"
+                 f" ｜ 冲突 {len(conflicts)} 个")
+        self.tools_status.set("扫描完成")
+        self.log(f"整理入库扫描：待移动 {len(moves)}、冗余副本 {len(dups)}、冲突 {len(conflicts)}", "ok")
+
+        if conflicts:
+            messagebox.showwarning(
+                "发现同名不同内容的文件",
+                f"有 {len(conflicts)} 个文件在仓库里存在同名但内容不同的版本，"
+                "已标记为「冲突（不动）」，需要你人工确认。\n\n"
+                + "\n".join("  • " + c["rel"] for c in conflicts[:10])
+                + ("\n  …" if len(conflicts) > 10 else ""),
+            )
+
+    # ---------- 执行：整理入库 ----------
+    def run_organize(self):
+        if self.busy:
+            return
+        if not self.move_records:
+            messagebox.showinfo("提示", "请先点「扫描分析」")
+            return
+
+        cols = list(self.org_tree["columns"])
+        rel_pos, act_pos = cols.index("rel"), cols.index("action")
+        chosen = {}
+        for iid in self.org_tree.get_children():
+            vals = self.org_tree.item(iid, "values")
+            if vals[cols.index("on")] == "☑":
+                chosen[vals[rel_pos]] = vals[act_pos]
+
+        todo = [r for r in self.move_records
+                if r["action"] != "conflict" and r["rel"] in chosen
+                and "冲突" not in chosen[r["rel"]]]
+        if not todo:
+            messagebox.showinfo("提示", "没有勾选可执行的项目（冲突项默认不勾选）")
+            return
+
+        moves = [r for r in todo if r["action"] == "move"]
+        dups = [r for r in todo if r["action"] == "dup"]
+        move_bytes = sum(r["size"] for r in moves)
+        repo = os.path.normpath(self.app.repo_var.get().strip().strip('"'))
+
+        # 跨盘搬运前先看目标盘空间
+        try:
+            free = shutil.disk_usage(repo).free
+        except OSError:
+            free = None
+        space_warn = ""
+        if free is not None and move_bytes > free:
+            space_warn = (f"\n\n⚠ 目标盘剩余空间不足！需要 {human_size(move_bytes)}，"
+                          f"只剩 {human_size(free)}。")
+
+        lines = [
+            f"模型仓库：{repo}\n",
+            "即将执行：\n",
+            f"  • 移动 {len(moves)} 个文件进仓库（共 {human_size(move_bytes)}）",
+            f"  • 删除 {len(dups)} 个冗余副本（仓库里已有一模一样的，共 {human_size(sum(r['size'] for r in dups))}）",
+            "\n这是【会移动/删除文件】的操作，请务必确认上方清单。",
+            "所有被删除的文件内容都已确认与仓库中的版本完全一致（指纹相同）。",
+        ]
+        if self.var_verify.get():
+            lines.append("已开启全量 MD5 复核。")
+        lines.append(space_warn)
+        if not messagebox.askokcancel("确认整理操作", "\n".join(lines), icon="warning"):
+            self.log("用户取消了整理操作。", "warn")
+            return
+
+        self.stop_evt.clear()
+        self.set_busy(True)
+        verify = self.var_verify.get()
+        automap = self.var_automap.get()
+
+        def worker():
+            manifest = {
+                "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "repo": repo,
+                "moved": [], "deleted": [], "failed": [],
+            }
+            ok = err = 0
+            for i, r in enumerate(todo, 1):
+                if self.stop_evt.is_set():
+                    break
+                self.win.after(0, self.tools_status.set,
+                               f"整理中 {i}/{len(todo)}：{r['rel']}")
+                try:
+                    os.makedirs(os.path.dirname(r["dst"]), exist_ok=True)
+                    if r["action"] == "move":
+                        if os.path.exists(r["dst"]):
+                            raise FileExistsError(f"目标已存在：{r['dst']}")
+                        shutil.move(r["path"], r["dst"])
+                        manifest["moved"].append(
+                            {"from": r["path"], "to": r["dst"], "size": r["size"]})
+                        ok += 1
+                        self.win.after(0, self.log, f"  ✔ 已入库：{r['rel']}", "ok")
+                    else:  # dup
+                        if verify:
+                            a = full_md5(r["path"])
+                            b = full_md5(r["twin"])
+                            if not a or a != b:
+                                raise ValueError("全量 MD5 不一致，已跳过（保护数据）")
+                        if os.path.exists(r["dst"]):
+                            os.remove(r["path"])
+                            manifest["deleted"].append(
+                                {"path": r["path"], "twin": r["twin"], "size": r["size"]})
+                            ok += 1
+                            self.win.after(0, self.log,
+                                           f"  ✔ 已删冗余副本：{r['path']}", "ok")
+                        else:
+                            raise FileNotFoundError("仓库中的对应文件不见了，跳过删除")
+                except Exception as e:
+                    err += 1
+                    manifest["failed"].append({"path": r["path"], "err": str(e)})
+                    self.win.after(0, self.log, f"  ✘ 失败 {r['rel']}：{e}", "err")
+
+            # 可选：整理完自动建立映射
+            mapped = []
+            if automap and not self.stop_evt.is_set():
+                for m, label in self._packs_for_automap():
+                    if os.path.isdir(m) and not is_reparse_point(m):
+                        good, msg = mklink_junction(m, repo)
+                        if good:
+                            mapped.append(m)
+                            self.win.after(0, self.log, f"  ✔ 已自动映射：{m}", "ok")
+                        else:
+                            self.win.after(0, self.log,
+                                           f"  ✘ 自动映射失败 {m}：{msg}", "err")
+
+            self._save_manifest(manifest)
+            self.win.after(0, self._organize_done, ok, err, len(mapped), manifest)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _packs_for_automap(self):
+        out = []
+        for t in self.app.targets:
+            m = self.app.models_of(t["path"])
+            if os.path.isdir(m) and not is_reparse_point(m):
+                out.append((m, t["path"]))
+        return out
+
+    def _save_manifest(self, manifest):
+        try:
+            here = os.path.dirname(os.path.abspath(__file__))
+            p = os.path.join(here, f"整理清单_{time.strftime('%Y%m%d_%H%M%S')}.json")
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump(manifest, f, ensure_ascii=False, indent=2)
+            self.win.after(0, self.log, f"整理清单已保存：{p}", "info")
+        except Exception as e:
+            self.win.after(0, self.log, f"保存整理清单失败：{e}", "warn")
+
+    def _organize_done(self, ok, err, mapped_n, manifest):
+        self.set_busy(False)
+        self.stop_evt.clear()
+        self.tools_status.set(f"整理完成（成功 {ok} / 失败 {err}）")
+        self.app.refresh_all()
+        self.app.save_config(silent=True)
+        msg = f"整理完成：成功 {ok} 项，失败 {err} 项。"
+        if mapped_n:
+            msg += f"\n已自动建立映射 {mapped_n} 个，重启 ComfyUI 生效。"
+        if err:
+            msg += "\n失败的条目见运行日志与整理清单。"
+        messagebox.showinfo("整理完成" if not err else "部分完成", msg)
+        # 若还有未映射的整合包，自动重扫一次刷新状态；否则只刷主界面
+        if self._packs_for_automap():
+            self.scan_organize()
+        else:
+            self.tools_status.set("所有整合包均已映射到仓库")
+
+    # ---------- 扫描：查重 ----------
+    def scan_dupes(self):
+        if self.busy:
+            return
+        roots = []
+        repo = self.app.repo_var.get().strip().strip('"')
+        if repo and os.path.isdir(repo) and not is_reparse_point(repo):
+            roots.append((repo, "仓库"))
+        for t in self.app.targets:
+            m = self.app.models_of(t["path"])
+            if os.path.isdir(m):
+                roots.append((m, os.path.basename(os.path.dirname(m)) or t["path"]))
+        if not roots:
+            messagebox.showinfo("提示", "没有可扫描的目录")
+            return
+
+        self.stop_evt.clear()
+        self.set_busy(True)
+        self.tools_status.set("正在扫描模型文件…")
+        models_only = self.dup_models_only.get()
+        verify = self.dup_verify.get()
+
+        def worker():
+            files = []
+            for m, label in roots:
+                for it in iter_model_files(m, pack_label=label,
+                                           models_only=models_only, stop=self.stop_evt):
+                    files.append(it)
+            if not self.stop_evt.is_set():
+                groups = find_duplicate_groups(files, verify_full=verify)
+                self.win.after(0, self._scan_dupes_done, groups, len(files), len(roots))
+            else:
+                self.win.after(0, lambda: (self.set_busy(False),
+                                           self.tools_status.set("已取消")))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _scan_dupes_done(self, groups, total_files, total_roots):
+        self.set_busy(False)
+        self.stop_evt.clear()
+        self.dup_records = []
+        for i in self.dup_tree.get_children():
+            self.dup_tree.delete(i)
+
+        for gi, g in enumerate(groups, 1):
+            for fi, f in enumerate(g["files"]):
+                keep = (f["path"] == g["keep"])
+                self.dup_records.append(
+                    {"grp": gi, "keep": keep, "path": f["path"],
+                     "size": g["size"], "mtime": f.get("mtime", 0)})
+                self.dup_tree.insert("", "end", values=(
+                    "☐", gi, os.path.basename(f["path"]), human_size(g["size"]),
+                    f["path"],
+                    time.strftime("%Y-%m-%d %H:%M", time.localtime(f.get("mtime") or 0)),
+                    "保留" if keep else "可删"))
+
+        waste = sum(g["waste"] for g in groups)
+        self.dup_summary.configure(
+            text=f"扫描 {total_roots} 个目录 / {total_files} 个文件 ｜ "
+                 f"{len(groups)} 组重复 ｜ 可释放 {human_size(waste)}")
+        self.tools_status.set("查重完成")
+        self.log(f"查重完成：{len(groups)} 组重复，可释放 {human_size(waste)}", "ok")
+        if not groups:
+            messagebox.showinfo("查重完成", "没有发现完全相同的重复文件。")
+
+    # ---------- 执行：删除重复副本 ----------
+    def run_delete_dupes(self):
+        if self.busy:
+            return
+        if not self.dup_records:
+            messagebox.showinfo("提示", "请先点「开始扫描」")
+            return
+        cols = list(self.dup_tree["columns"])
+        path_pos, keep_pos = cols.index("path"), cols.index("keep")
+        victims = []
+        for iid in self.dup_tree.get_children():
+            vals = self.dup_tree.item(iid, "values")
+            if vals[cols.index("on")] == "☑":
+                if vals[keep_pos] == "保留":
+                    messagebox.showwarning(
+                        "提示",
+                        f"「{os.path.basename(vals[path_pos])}」是本组建议保留的副本，\n"
+                        "不建议删除。已取消操作，请重新勾选。")
+                    return
+                victims.append(vals[path_pos])
+        if not victims:
+            messagebox.showinfo("提示", "没有勾选任何可删副本")
+            return
+
+        total = sum(r["size"] for r in self.dup_records if r["path"] in victims)
+        use_trash = self._ask_trash()
+        if not messagebox.askokcancel(
+            "确认删除",
+            f"将删除 {len(victims)} 个重复副本，释放约 {human_size(total)}。\n\n"
+            + "\n".join("  • " + v for v in victims[:15])
+            + ("\n  …" if len(victims) > 15 else "")
+            + f"\n\n删除方式：{'移入回收站' if use_trash else '直接删除（不可恢复）'}",
+            icon="warning",
+        ):
+            return
+
+        self.stop_evt.clear()
+        self.set_busy(True)
+
+        def worker():
+            ok = err = 0
+            for i, p in enumerate(victims, 1):
+                if self.stop_evt.is_set():
+                    break
+                self.win.after(0, self.tools_status.set, f"删除中 {i}/{len(victims)}")
+                try:
+                    if use_trash:
+                        self._to_trash(p)
+                    else:
+                        os.remove(p)
+                    ok += 1
+                    self.win.after(0, self.log, f"  ✔ 已删除重复副本：{p}", "ok")
+                except Exception as e:
+                    err += 1
+                    self.win.after(0, self.log, f"  ✘ 删除失败 {p}：{e}", "err")
+            self.win.after(0, self._delete_done, ok, err)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _ask_trash(self):
+        try:
+            import send2trash  # noqa: F401
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def _to_trash(path):
+        try:
+            from send2trash import send2trash as s2t
+            s2t(path)
+            return
+        except Exception:
+            pass
+        # 退回 PowerShell 的回收站（需要 Shell.Application）
+        ps = (
+            "$s=New-Object -ComObject Shell.Application;"
+            f"$i=$s.NameSpace(0).ParseName('{path}');"
+            "if($i){$i.InvokeVerb('delete')}else{throw 'not found'}"
+        )
+        p = subprocess.run(["powershell", "-NoProfile", "-NonInteractive",
+                            "-Command", ps],
+                           capture_output=True, creationflags=CREATE_NO_WINDOW)
+        if p.returncode != 0 or os.path.exists(path):
+            raise RuntimeError("无法移入回收站，已放弃删除以保安全")
+
+    def _delete_done(self, ok, err):
+        self.set_busy(False)
+        self.stop_evt.clear()
+        self.tools_status.set(f"删除完成（成功 {ok} / 失败 {err}）")
+        self.app.refresh_all()
+        messagebox.showinfo("删除完成", f"成功 {ok} 个，失败 {err} 个。")
 
 
 def report_crash(exc_text: str, show_dialog: bool = True):
