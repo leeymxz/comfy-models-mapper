@@ -2,67 +2,53 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>ComfyUI 模型目录映射工具 - 教程</title>
+<title>ComfyUI 模型目录映射工具 v1.1 — 整理入库 / 模型查重</title>
 <style>
   :root{
     --ink:#1a1a1a; --ink2:#444; --ink3:#777;
-    --line:#d4d8de; --panel:#ffffff; --field:#ffffff;
-    --accent:#0078d4; --accent-soft:#e5f1fb;
+    --line:#d4d8de; --panel:#ffffff;
+    --accent:#0078d4; --accent-soft:#e5f1fb; --accent-deep:#005ea6;
     --ok:#107c41; --warn:#9a6700; --err:#c02626;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{width:100%;height:100%;overflow:hidden;background:#111}
   body{font-family:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;
        -webkit-font-smoothing:antialiased}
-  #stage{position:relative;width:1920px;height:1080px;overflow:hidden;
-         background:#eef1f5;
-         background-image:
-           radial-gradient(1200px 700px at 50% 34%, #ffffff 0%, #e6ebf2 55%, #d8dee7 100%);}
-  #bg-dots{position:absolute;inset:0;opacity:.5;
+  #stage{position:relative;width:1920px;height:1080px;overflow:hidden;background:#eef1f5}
+  #bg-dots{position:absolute;left:-700px;top:-700px;width:3200px;height:2500px;opacity:.5;
     background-image:radial-gradient(#c3cad6 1.2px, transparent 1.2px);
     background-size:34px 34px;}
   #cam{position:absolute;left:0;top:0;width:1920px;height:1080px;
        transform-origin:0 0;will-change:transform}
   .scene{position:absolute;left:0;top:0;width:1920px;height:1080px;opacity:0}
 
-  /* ---------- 通用元件 ---------- */
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
-        box-shadow:0 10px 30px rgba(20,30,50,.10)}
   .kicker{font-size:26px;letter-spacing:.18em;color:var(--accent);font-weight:700}
   h1.big{font-size:86px;font-weight:800;color:var(--ink);letter-spacing:-.01em;line-height:1.14}
   .sub{font-size:36px;color:var(--ink2);line-height:1.5}
   .mono{font-family:Consolas,"Cascadia Mono",monospace}
 
-  /* 高亮圈 */
-  .ring{position:absolute;border:4px solid var(--accent);border-radius:12px;
-        box-shadow:0 0 0 6px rgba(0,120,212,.14), 0 0 34px rgba(0,120,212,.30);
-        pointer-events:none;opacity:0}
-
   /* ---------- 应用窗口 ---------- */
-  #app{position:absolute;left:370px;top:150px;width:1180px;height:780px;
-       background:#f0f0f0;border:1px solid #b9bfc7;border-radius:10px;
-       box-shadow:0 26px 70px rgba(15,25,45,.30);display:flex;flex-direction:column;
-       overflow:hidden;opacity:0}
+  .win{position:absolute;background:#f0f0f0;border:1px solid #b9bfc7;border-radius:10px;
+       box-shadow:0 26px 70px rgba(15,25,45,.30);display:flex;flex-direction:column;overflow:hidden}
   .titlebar{height:38px;flex:0 0 38px;background:#f7f7f7;border-bottom:1px solid #dcdcdc;
             display:flex;align-items:center;padding:0 14px;font-size:19px;color:#333;font-weight:600}
   .titlebar .dots{margin-left:auto;display:flex;gap:14px;color:#888;font-size:15px}
-  #app .body{flex:1;padding:10px 12px 0;overflow:hidden;display:flex;flex-direction:column;gap:8px}
+  .win .body{flex:1;padding:10px 12px 0;overflow:hidden;display:flex;flex-direction:column;gap:8px}
   .grp{border:1px solid #c3c8ce;border-radius:6px;background:#fafafa;padding:2px 10px 8px;position:relative}
   .grp legend{font-size:17px;color:#333;padding:0 6px;font-weight:600}
-  .grp.hot{border-color:var(--accent);background:#fff;
-           box-shadow:0 0 0 3px rgba(0,120,212,.12)}
+  .grp.hot{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(0,120,212,.12)}
   .row{display:flex;align-items:center;gap:8px;margin:8px 0 4px}
-  .entry{flex:1;height:30px;background:var(--field);border:1px solid #b6bcc4;border-radius:3px;
+  .entry{flex:1;height:30px;background:#fff;border:1px solid #b6bcc4;border-radius:3px;
          display:flex;align-items:center;padding:0 10px;font-size:16px;color:#222;
          font-family:Consolas,monospace;overflow:hidden;white-space:nowrap}
   .btn{height:30px;padding:0 14px;background:#f3f3f3;border:1px solid #b6bcc4;border-radius:3px;
        font-size:16px;color:#222;display:inline-flex;align-items:center;justify-content:center;
        white-space:nowrap}
-  .btn.primary{background:var(--accent);border-color:#005ea6;color:#fff;font-weight:600}
-  .btn.pressed{background:#005ea6;color:#fff;transform:translateY(1px)}
+  .btn.primary{background:var(--accent);border-color:var(--accent-deep);color:#fff;font-weight:600}
+  .btn.pressed{background:var(--accent-deep);color:#fff;transform:translateY(1px)}
+  .btn.new{background:#fff;border-color:var(--accent);color:var(--accent);font-weight:700}
   .info{font-size:16px;color:#666;height:22px;line-height:22px}
   .info.ok{color:var(--ok);font-weight:600}
-
   .toolbar{display:flex;align-items:center;gap:6px;margin:8px 0 6px}
   .sep{width:2px;height:22px;background:#ccd0d6;margin:0 4px}
 
@@ -73,51 +59,89 @@
   table.tree td{padding:6px 8px;border-bottom:1px solid #eceef1;color:#222;
                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   table.tree td.path{font-family:Consolas,monospace;font-size:14px}
-  table.tree td.state{color:#8a6d00}
-  table.tree td.state.mapped{color:var(--ok);font-weight:600}
   table.tree td.on{text-align:center;color:var(--accent);font-size:17px}
   table.tree tr.sel td{background:var(--accent-soft)}
+  .a-move{color:#0b5fa5;font-weight:600}
+  .a-dup{color:#8a6d00;font-weight:600}
+  .a-conf{color:#a33;font-weight:600}
+  .a-keep{color:var(--ok);font-weight:700}
+  .a-del{color:#a33;font-weight:600}
   .hint{font-size:14px;color:#888;margin-top:5px}
 
-  .btnbar{display:flex;align-items:center;gap:6px;padding:2px 2px}
-  .log{height:132px;background:#fff;border:1px solid #c9ced4;overflow:hidden;
-       font-family:Consolas,monospace;font-size:13px;line-height:1.55;padding:6px 8px;color:#333}
-  .log .l-ok{color:var(--ok)} .log .l-warn{color:var(--warn)} .log .l-step{color:var(--accent);font-weight:600}
-  .statusbar{flex:0 0 28px;display:flex;align-items:center;padding:0 10px;font-size:14px;color:#444;
-             border-top:1px solid #dcdcdc;background:#f7f7f7;gap:12px}
-  .statusbar .r{margin-left:auto;color:#777}
+  /* 工具箱窗口 */
+  #tools .tabs{flex:0 0 40px;display:flex;align-items:flex-end;gap:4px;padding:0 12px;
+               background:#e9e9e9;border-bottom:1px solid #d2d2d2}
+  .tab{height:34px;padding:0 22px;background:#dcdcdc;border:1px solid #cfcfcf;border-bottom:none;
+       border-radius:8px 8px 0 0;font-size:17px;color:#555;display:flex;align-items:center;
+       font-weight:600}
+  .tab.on{background:#f7f7f7;color:#111;border-color:#c3c8ce}
+  .optrow{display:flex;align-items:center;gap:10px;font-size:15px;color:#333;padding:6px 2px}
+  .cb{width:15px;height:15px;border:1.5px solid #8a9099;border-radius:3px;background:#fff;
+      display:inline-flex;align-items:center;justify-content:center;font-size:13px;color:#fff;
+      line-height:1;flex:0 0 auto}
+  .cb.on{background:var(--accent);border-color:var(--accent-deep)}
+  .tbar{display:flex;align-items:center;gap:6px;padding:6px 2px 8px}
+  .summ{margin-left:auto;font-size:14px;color:#555;font-family:Consolas,monospace}
+  .progwrap{flex:0 0 44px;display:flex;align-items:center;gap:12px;padding:0 12px;
+            border-top:1px solid #dcdcdc;background:#f7f7f7}
+  .prog{width:280px;height:14px;background:#e2e5ea;border-radius:7px;overflow:hidden;
+        border:1px solid #cfd4db}
+  .prog i{display:block;height:100%;width:0;background:var(--accent);border-radius:7px}
+  .tstatus{font-size:14px;color:#444;white-space:nowrap;overflow:hidden}
 
-  /* ---------- 弹窗 ---------- */
+  .log{background:#fff;border:1px solid #c9ced4;overflow:hidden;
+       font-family:Consolas,monospace;font-size:14px;line-height:1.6;padding:8px 10px;color:#333}
+  .log .l-ok{color:var(--ok)} .log .l-warn{color:var(--warn)}
+  .log .l-step{color:var(--accent);font-weight:600}
+
+  /* 弹窗 */
   #modal{position:absolute;left:0;top:0;width:1920px;height:1080px;
          background:rgba(20,26,36,.34);opacity:0;display:flex;align-items:center;justify-content:center}
-  #modal .box{width:980px;background:#fff;border-radius:8px;box-shadow:0 30px 80px rgba(0,0,0,.35);
+  #modal .box{width:1000px;background:#fff;border-radius:8px;box-shadow:0 30px 80px rgba(0,0,0,.35);
               border:1px solid #c3c8ce;overflow:hidden}
-  #modal .mbar{height:42px;background:#f7f7f7;border-bottom:1px solid #dcdcdc;
+  #modal .mbar{height:44px;background:#f7f7f7;border-bottom:1px solid #dcdcdc;
                display:flex;align-items:center;padding:0 16px;font-size:19px;font-weight:600;color:#222}
-  #modal .mbody{padding:16px 20px;font-size:17px;line-height:1.75;color:#333;
+  #modal .mbody{padding:16px 20px;font-size:17px;line-height:1.8;color:#333;
                 font-family:Consolas,monospace;white-space:pre-wrap}
   #modal .mfoot{display:flex;justify-content:flex-end;gap:10px;padding:12px 20px;
                 border-top:1px solid #e6e8ec;background:#fafbfc}
 
-  /* ---------- 鼠标指针 ---------- */
+  /* 指针 */
   #cursor{position:absolute;left:0;top:0;width:34px;height:34px;opacity:0;pointer-events:none;
           filter:drop-shadow(0 3px 6px rgba(0,0,0,.35));z-index:60}
   #cursor .dot{position:absolute;left:20px;top:24px;width:11px;height:11px;border-radius:50%;
                background:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.35);opacity:0}
   #cursor.click .dot{opacity:1}
 
-  /* ---------- 字幕 / HUD ---------- */
+  /* 字幕 / HUD */
   #capwrap{position:absolute;left:0;right:0;bottom:58px;display:flex;justify-content:center;
            pointer-events:none;z-index:50}
   #cap{max-width:1340px;background:rgba(255,255,255,.94);color:#151515;font-size:31px;
        line-height:1.45;padding:16px 34px;border-radius:14px;text-align:center;
        box-shadow:0 8px 26px rgba(20,30,50,.16);border:1px solid rgba(0,0,0,.06);
        opacity:0;transform:translateY(8px)}
-  #hud{position:absolute;left:44px;top:38px;z-index:50;display:flex;align-items:center;gap:14px;opacity:0}
+  #hud{position:absolute;right:44px;top:38px;z-index:50;display:flex;align-items:center;gap:14px;opacity:0}
   #hud .tag{background:var(--accent);color:#fff;font-size:20px;font-weight:700;
             padding:7px 18px;border-radius:999px;box-shadow:0 6px 18px rgba(0,120,212,.30)}
   #hud .t{font-size:19px;color:#5b6470;font-family:Consolas,monospace}
   #bar{position:absolute;left:0;bottom:0;height:6px;background:var(--accent);width:0;z-index:51}
+
+  /* ---------- 概念图元件 ---------- */
+  .chip{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 14px;
+        font-size:17px;color:#222;box-shadow:0 4px 14px rgba(20,30,50,.07)}
+  .chip .sz{font-family:Consolas,monospace;color:#666;font-size:15px;margin-left:8px}
+  .bucket{background:#fff;border:2px solid var(--line);border-radius:10px;padding:10px 12px}
+  .bucket.hot{border-color:var(--accent);box-shadow:0 0 0 4px rgba(0,120,212,.12)}
+  .fpbar{display:flex;gap:3px;margin-top:6px}
+  .fpbar i{height:9px;border-radius:2px;background:#c9d3de;flex:1}
+  .fpbar i.h{background:var(--accent)}
+  .badge{display:inline-block;font-size:14px;font-weight:700;padding:2px 10px;border-radius:999px}
+  .badge.same{background:#e6f4ea;color:var(--ok);border:1px solid #9ccfae}
+  .badge.diff{background:#fdecec;color:#a33;border:1px solid #e5a3a3}
+  .pill{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);
+        border-radius:999px;padding:7px 18px;font-size:18px;color:#333;
+        box-shadow:0 4px 14px rgba(20,30,50,.07)}
+  .num{font-family:Consolas,monospace;font-weight:800}
 </style>
 </head>
 <body>
@@ -127,161 +151,174 @@
 
     <!-- ============ 1 标题 ============ -->
     <div class="scene" id="sc-title">
-      <div style="position:absolute;left:200px;top:392px;width:1520px;text-align:center">
-        <div class="kicker" id="t-kick">WINDOWS 工具</div>
-        <h1 class="big" id="t-h1" style="margin-top:20px">ComfyUI 模型目录映射工具</h1>
-        <div class="sub" id="t-sub" style="margin-top:26px">让多个整合包，共用同一份模型仓库</div>
+      <div style="position:absolute;left:200px;top:360px;width:1520px;text-align:center">
+        <div class="kicker" id="t-kick">V 1 . 1　 新 功 能</div>
+        <h1 class="big" id="t-h1" style="margin-top:20px">整理入库 · 模型查重</h1>
+        <div class="sub" id="t-sub" style="margin-top:26px">把散落在各整合包的模型收回来，把重复的副本找出来</div>
+        <div id="t-pills" style="margin-top:44px;display:flex;gap:18px;justify-content:center"></div>
       </div>
     </div>
 
     <!-- ============ 2 痛点 ============ -->
     <div class="scene" id="sc-problem">
-      <div style="position:absolute;left:180px;top:200px;width:1560px">
-        <div class="kicker">问题</div>
-        <h1 class="big" style="font-size:56px;margin-top:14px">每个整合包，都有一份独立的 models</h1>
-        <div id="p-cards" style="display:flex;gap:34px;margin-top:56px"></div>
-        <div id="p-total" style="margin-top:52px;opacity:0">
-          <div style="display:flex;align-items:baseline;gap:20px">
-            <div style="font-size:74px;font-weight:800;color:#c02626" id="p-num">2.4 TB</div>
-            <div style="font-size:34px;color:#444">被重复占用　<span style="color:#107c41;font-weight:700">实际只需 829 GB</span></div>
+      <div style="position:absolute;left:180px;top:170px;width:1560px">
+        <div class="kicker">遗留问题</div>
+        <h1 class="big" style="font-size:54px;margin-top:14px">映射解决"以后"，那"以前"复制出去的呢？</h1>
+        <div id="p-cards" style="display:flex;gap:30px;margin-top:48px"></div>
+        <div id="p-total" style="margin-top:44px;opacity:0">
+          <div style="display:flex;align-items:baseline;gap:22px">
+            <div style="font-size:72px;font-weight:800;color:#c02626" id="p-num" class="num">0 GB</div>
+            <div style="font-size:32px;color:#444">被重复占用　<span style="color:#107c41;font-weight:700">其实一份就够</span></div>
           </div>
-          <div style="margin-top:20px;height:26px;background:#e3e7ed;border-radius:13px;overflow:hidden">
-            <div id="p-bar" style="height:100%;width:0;background:linear-gradient(90deg,#e06666,#c02626);border-radius:13px"></div>
+          <div style="margin-top:18px;height:24px;background:#e3e7ed;border-radius:12px;overflow:hidden">
+            <div id="p-bar" style="height:100%;width:0;background:linear-gradient(90deg,#e06666,#c02626);border-radius:12px"></div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ============ 3 目录联接 ============ -->
-    <div class="scene" id="sc-concept">
-      <div style="position:absolute;left:180px;top:190px;width:1560px">
-        <div class="kicker">原理</div>
-        <h1 class="big" style="font-size:54px;margin-top:14px">目录联接：指向同一份真实数据</h1>
-        <div style="display:flex;align-items:center;gap:40px;margin-top:74px">
-          <div id="c-left" style="display:flex;flex-direction:column;gap:26px;width:520px"></div>
-          <div id="c-arrows" style="position:relative;width:300px;height:330px">
-            <svg width="300" height="330" id="c-svg"></svg>
+    <!-- ============ 3 入口 ============ -->
+    <div class="scene" id="sc-entry">
+      <div class="win" id="app" style="left:300px;top:150px;width:1180px;height:660px;opacity:0">
+        <div class="titlebar">ComfyUI 模型目录映射工具 v1.1<span class="dots">－ □ ✕</span></div>
+        <div class="body">
+          <div class="grp"><legend>① 模型仓库目录</legend>
+            <div class="row"><div class="entry">E:\COMFYUI_dapao\ComfyUI\models</div>
+              <div class="btn">浏览…</div><div class="btn">检测信息</div></div>
+            <div class="info ok">子目录 12 个 ｜ 文件 989 个 ｜ 约 829.28 GB</div>
           </div>
-          <div id="c-right" style="width:560px;opacity:0"></div>
+          <div class="grp"><legend>② 要映射的 ComfyUI 安装列表</legend>
+            <div class="toolbar">
+              <div class="btn">＋ 添加目录</div><div class="btn">自动扫描各盘</div>
+              <div class="sep"></div><div class="btn">全选</div><div class="btn">↻ 刷新状态</div>
+            </div>
+            <table class="tree"><thead><tr>
+              <th style="width:56px">启用</th><th style="width:300px">ComfyUI 安装目录</th>
+              <th style="width:190px">models 当前状态</th><th>实际指向</th></tr></thead>
+              <tbody>
+                <tr><td class="on">☑</td><td class="path">H:\ComfyUITE_20xx_20260813\ComfyUI</td>
+                    <td>✔ 已映射</td><td class="path">E:\COMFYUI_dapao\ComfyUI\models</td></tr>
+                <tr><td class="on">☑</td><td class="path">F:\ComfyUITE_2080_20260920\ComfyUI</td>
+                    <td>● 真实目录（12 项 / 812.4 GB）</td><td></td></tr>
+              </tbody></table>
+          </div>
+          <div class="grp"><legend>运行日志</legend>
+            <div class="log" style="height:96px" id="app-log"></div>
+          </div>
+          <div class="toolbar" style="margin-top:auto">
+            <div class="btn primary">▶ 开始映射</div><div class="btn">■ 解除映射</div>
+            <div class="sep"></div><div class="btn">↩ 一键还原备份</div><div class="btn">🧹 清理空目录</div>
+            <div class="sep"></div><div class="btn">保存配置</div><div class="btn">导出日志</div>
+            <div class="sep"></div>
+            <div class="btn new" id="btn-tools">🗂 整理入库 / 查重</div>
+          </div>
         </div>
-        <div id="c-note" style="margin-top:40px;font-size:32px;color:#107c41;font-weight:700;opacity:0">
-          硬盘上只存一份 —— 829 GB
+      </div>
+      <div class="win" id="tools-entry" style="left:180px;top:64px;width:1560px;height:736px;opacity:0"></div>
+      <div id="e-ring" style="position:absolute;border:4px solid var(--accent);border-radius:10px;
+           box-shadow:0 0 0 6px rgba(0,120,212,.14),0 0 34px rgba(0,120,212,.30);opacity:0"></div>
+    </div>
+
+    <!-- ============ 4 整理入库 · 选项 ============ -->
+    <div class="scene" id="sc-orgtab">
+      <div class="win" id="tools-opt" style="left:180px;top:64px;width:1560px;height:736px;opacity:0"></div>
+    </div>
+
+    <!-- ============ 5 整理入库 · 扫描结果 ============ -->
+    <div class="scene" id="sc-orgscan">
+      <div class="win" id="tools-scan" style="left:180px;top:64px;width:1560px;height:736px;opacity:0"></div>
+    </div>
+
+    <!-- ============ 6 确认清单 ============ -->
+    <div class="scene" id="sc-orgconfirm">
+      <div class="win" id="tools-conf" style="left:180px;top:64px;width:1560px;height:736px;opacity:0"></div>
+      <div id="modal"><div class="box">
+        <div class="mbar">请确认整理操作</div>
+        <div class="mbody" id="cf-body"></div>
+        <div class="mfoot"><div class="btn">取消</div><div class="btn primary" id="cf-ok">确定</div></div>
+      </div></div>
+    </div>
+
+    <!-- ============ 7 执行 + 自动映射 ============ -->
+    <div class="scene" id="sc-orgexec">
+      <div class="win" id="tools-exec" style="left:180px;top:64px;width:1560px;height:736px;opacity:0"></div>
+    </div>
+
+    <!-- ============ 8 查重原理 ============ -->
+    <div class="scene" id="sc-dupconcept">
+      <div style="position:absolute;left:150px;top:130px;width:1620px">
+        <div class="kicker">查重原理</div>
+        <h1 class="big" style="font-size:52px;margin-top:12px">先按大小分组，再比对采样指纹</h1>
+        <div style="display:flex;align-items:flex-start;gap:36px;margin-top:44px">
+          <div style="width:400px">
+            <div style="font-size:20px;color:#555;margin-bottom:14px">① 收集所有模型文件</div>
+            <div id="d-files" style="display:flex;flex-direction:column;gap:12px"></div>
+          </div>
+          <div style="width:56px;padding-top:60px" id="d-ar1"></div>
+          <div style="width:520px">
+            <div style="font-size:20px;color:#555;margin-bottom:14px">② 按文件大小分组（大小不同 → 一定不同）</div>
+            <div id="d-buckets" style="display:flex;flex-direction:column;gap:16px"></div>
+          </div>
+          <div style="width:56px;padding-top:60px" id="d-ar2"></div>
+          <div style="width:520px">
+            <div style="font-size:20px;color:#555;margin-bottom:14px">③ 同大小组内读「头 / 中 / 尾」各 1MB 算指纹</div>
+            <div id="d-fp" style="display:flex;flex-direction:column;gap:16px"></div>
+          </div>
+        </div>
+        <div id="d-note" style="margin-top:34px;display:flex;gap:16px;align-items:center;opacity:0">
+          <div class="pill"><span class="badge same">指纹相同 = 内容完全相同</span></div>
+          <div class="pill"><span class="badge diff">同大小不同内容 → 指纹不同</span></div>
+          <div class="pill" style="color:#0b5fa5;font-weight:600">每文件只读约 3MB，比全量校验快两个数量级</div>
         </div>
       </div>
     </div>
 
-    <!-- ============ 4 工具介绍 ============ -->
-    <div class="scene" id="sc-intro">
-      <div style="position:absolute;left:180px;top:250px;width:1560px">
-        <div class="kicker">工具</div>
-        <h1 class="big" style="font-size:58px;margin-top:14px">把 models 统一链接到模型仓库</h1>
-        <div style="display:flex;gap:26px;margin-top:60px" id="i-cards"></div>
-      </div>
+    <!-- ============ 9 查重扫描 ============ -->
+    <div class="scene" id="sc-dupscan">
+      <div class="win" id="tools-dup" style="left:180px;top:64px;width:1560px;height:736px;opacity:0"></div>
     </div>
 
-    <!-- ============ 5 安全机制 ============ -->
+    <!-- ============ 10 删除副本 ============ -->
+    <div class="scene" id="sc-dupdelete">
+      <div class="win" id="tools-del" style="left:180px;top:64px;width:1560px;height:736px;opacity:0"></div>
+    </div>
+
+    <!-- ============ 11 安全设计 ============ -->
     <div class="scene" id="sc-safety">
-      <div style="position:absolute;left:180px;top:200px;width:1560px">
-        <div class="kicker">安全</div>
-        <h1 class="big" style="font-size:54px;margin-top:14px">八百 GB 的数据，不能赌</h1>
+      <div style="position:absolute;left:210px;top:190px;width:1500px">
+        <div class="kicker">安全设计</div>
+        <h1 class="big" style="font-size:54px;margin-top:12px">会动文件的功能，保护要做厚</h1>
         <div id="s-list" style="margin-top:48px;display:flex;flex-direction:column;gap:20px"></div>
       </div>
     </div>
 
-    <!-- ============ 6~12 应用窗口 ============ -->
-    <div class="scene" id="sc-app">
-      <div id="app">
-        <div class="titlebar">ComfyUI 模型目录映射工具 v1.0<span class="dots"><span>—</span><span>□</span><span>×</span></span></div>
-        <div class="body">
-          <fieldset class="grp" id="grp-repo">
-            <legend>① 模型仓库目录（真实存放模型的文件夹，即映射源）</legend>
-            <div class="row">
-              <div class="entry" id="repo-entry"></div>
-              <div class="btn" id="btn-browse">浏览…</div>
-              <div class="btn" id="btn-detect">检测信息</div>
-            </div>
-            <div class="info" id="repo-info">未选择</div>
-          </fieldset>
-
-          <fieldset class="grp" id="grp-list">
-            <legend>② 要映射的 ComfyUI 安装列表（勾选后点【开始映射】）</legend>
-            <div class="toolbar" id="toolbar">
-              <div class="btn">＋ 添加目录</div><div class="btn">✎ 修改选中</div><div class="btn">－ 移除选中</div>
-              <div class="sep"></div><div class="btn">全选</div><div class="btn">全不选</div>
-              <div class="sep"></div><div class="btn" id="btn-scan">自动扫描各盘</div><div class="btn">↻ 刷新状态</div>
-            </div>
-            <table class="tree">
-              <thead><tr>
-                <th style="width:66px">启用</th><th style="width:330px">ComfyUI 安装目录</th>
-                <th style="width:250px">models 当前状态</th><th>实际指向</th>
-              </tr></thead>
-              <tbody id="tree-body"></tbody>
-            </table>
-            <div class="hint">提示：单击「启用」列可快速切换勾选状态；双击整行可修改路径。</div>
-          </fieldset>
-
-          <div class="btnbar" id="btnbar">
-            <div class="btn primary" id="btn-map">▶ 开始映射（勾选项）</div>
-            <div class="btn" id="btn-unmap">■ 解除映射（勾选项）</div>
-            <div class="sep"></div>
-            <div class="btn" id="btn-restore">↩ 一键还原备份</div>
-            <div class="btn">🧹 清理空目录</div>
-            <div class="sep"></div>
-            <div class="btn">保存配置</div><div class="btn">导出日志</div>
-          </div>
-
-          <fieldset class="grp" id="grp-log">
-            <legend> 运行日志 </legend>
-            <div class="log" id="log"></div>
-          </fieldset>
-
-          <div class="statusbar"><span id="status">就绪</span>
-            <span class="r">管理员权限：否（本工具用 Junction，无需管理员）</span></div>
-        </div>
-      </div>
-      <div class="ring" id="ring"></div>
-    </div>
-
-    <!-- ============ 13 技术对比 ============ -->
-    <div class="scene" id="sc-tech">
-      <div style="position:absolute;left:180px;top:200px;width:1560px">
-        <div class="kicker">技术细节</div>
-        <h1 class="big" style="font-size:54px;margin-top:14px">为什么用 /J 而不是 /D</h1>
-        <div id="tc-table" style="margin-top:52px"></div>
-        <div id="tc-note" style="margin-top:40px;font-size:32px;color:#107c41;font-weight:700;opacity:0">
-          对本地磁盘，两者效果完全一样
-        </div>
-      </div>
-    </div>
-
-    <!-- ============ 14 结尾 ============ -->
+    <!-- ============ 12 结尾 ============ -->
     <div class="scene" id="sc-outro">
-      <div style="position:absolute;left:200px;top:330px;width:1520px;text-align:center">
-        <div class="kicker">开源</div>
-        <h1 class="big" style="font-size:70px;margin-top:20px">已在 GitHub 开源</h1>
-        <div class="card mono" id="o-url" style="margin:52px auto 0;width:900px;padding:30px 0;font-size:40px;color:#0078d4;font-weight:700;opacity:0">
-          github.com/leeymxz/comfy-models-mapper
+      <div style="position:absolute;left:200px;top:392px;width:1520px;text-align:center">
+        <div class="kicker">开 源</div>
+        <h1 class="big" id="o-h1" style="font-size:66px;margin-top:18px">ComfyUI 模型目录映射工具 v1.1</h1>
+        <div class="sub" id="o-sub" style="margin-top:24px">映射 · 整理入库 · 模型查重</div>
+        <div id="o-url" style="margin-top:46px;opacity:0">
+          <div class="pill" style="font-family:Consolas,monospace;font-size:26px">
+            github.com/leeymxz/comfy-models-mapper</div>
         </div>
-        <div id="o-star" style="margin-top:44px;font-size:36px;color:#444;opacity:0">如果对你有帮助，欢迎点个 ⭐</div>
+        <div id="o-star" style="margin-top:34px;opacity:0;font-size:30px;color:#9a6700;font-weight:700">
+          如果对你有帮助，欢迎点个星星</div>
       </div>
     </div>
 
-    <div id="cursor"><svg width="34" height="34" viewBox="0 0 34 34">
-      <path d="M6 4 L6 26 L11 21 L15 30 L19 28 L15 19 L23 19 Z"
-            fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg>
-      <div class="dot"></div></div>
   </div>
 
-  <div id="modal">
-    <div class="box">
-      <div class="mbar">请确认操作清单</div>
-      <div class="mbody" id="modal-body"></div>
-      <div class="mfoot"><div class="btn">取消</div><div class="btn primary" id="modal-ok">确定</div></div>
-    </div>
+  <div id="cursor">
+    <svg width="34" height="34" viewBox="0 0 34 34">
+      <path d="M6 3 L26 17 L16 19 L20 29 L14 31 L10 20 L6 25 Z"
+            fill="#fff" stroke="#1a1a1a" stroke-width="2" stroke-linejoin="round"/>
+    </svg>
+    <div class="dot"></div>
   </div>
 
-  <div id="hud"><div class="tag" id="hud-tag"></div><div class="t" id="hud-t"></div></div>
   <div id="capwrap"><div id="cap"></div></div>
+  <div id="hud"><div class="tag" id="hud-tag">镜头</div><div class="t" id="hud-t">0.0s</div></div>
   <div id="bar"></div>
 </div>
 
@@ -290,47 +327,29 @@
 const $ = id => document.getElementById(id);
 const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
 const ease = t => 1 - Math.pow(1 - clamp01(t), 3);
-const easeIO = t => t < .5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2;
 const lerp = (a,b,t) => a + (b-a)*t;
-/** 在 [a,b] 内的进度 */
 const seg = (lt,a,b) => clamp01((lt-a)/(b-a||1e-6));
-/** 淡入 */
 const fi = (lt,d) => ease(seg(lt,0,d||0.4));
 
-/* 文本缓存，避免每帧重排 */
 const _cache = {};
-function txt(id, v){
-  if(_cache[id] === v) return;
-  _cache[id] = v;
-  const e = $(id); if(e) e.textContent = v;
-}
-function html(id, v){
-  if(_cache[id] === v) return;
-  _cache[id] = v;
-  const e = $(id); if(e) e.innerHTML = v;
-}
-function op(id, v){
-  const e = $(id); if(e) e.style.opacity = v.toFixed(3);
-}
+function txt(id, v){ if(_cache[id]===v) return; _cache[id]=v; const e=$(id); if(e) e.textContent=v; }
+function html(id, v){ if(_cache[id]===v) return; _cache[id]=v; const e=$(id); if(e) e.innerHTML=v; }
+function op(id, v){ const e=$(id); if(e) e.style.opacity = v.toFixed(3); }
 function show(id, on){ const e=$(id); if(e) e.style.display = on ? '' : 'none'; }
 
-/* ==================== 时间轴数据 ==================== */
-/* 由 render.js 注入 window.__TLDATA；独立预览时回退到 fetch */
 let TL = window.__TLDATA || null;
 
-/* ==================== 镜头 ==================== */
-function FOCUS(cx, cy, s){
-  const tx = 960 - cx * s, ty = 540 - cy * s;
-  return {tx, ty, s};
-}
+function FOCUS(cx, cy, s){ return {tx: 960 - cx*s, ty: 540 - cy*s, s}; }
 function applyCam(f){
-  $('cam').style.transform = `translate(${f.tx.toFixed(2)}px, ${f.ty.toFixed(2)}px) scale(${f.s.toFixed(4)})`;
+  const hw = 960/f.s, hh = 540/f.s;
+  const cx = clamp(960 - f.tx, hw, 1920-hw), cy = clamp(540 - f.ty, hh, 1080-hh);
+  $('cam').style.transform =
+    `translate(${(960-cx*f.s).toFixed(2)}px, ${(540-cy*f.s).toFixed(2)}px) scale(${f.s.toFixed(4)})`;
 }
+function clamp(v,a,b){ return v<a?a:v>b?b:v; }
 
-/* 字幕切分：按标点切成 15~19 字的块，按字数分配时间 */
 function capSplit(text, dur){
-  const parts = [];
-  let buf = "";
+  const parts = []; let buf = "";
   for(const ch of text){
     buf += ch;
     if("。！？；".includes(ch)){ parts.push(buf); buf=""; }
@@ -340,478 +359,381 @@ function capSplit(text, dur){
   if(buf) parts.push(buf);
   const total = parts.reduce((s,p)=>s+p.length,0) || 1;
   let t = 0; const out = [];
-  for(const p of parts){
-    const d = dur * (p.length/total);
-    out.push({text:p, t0:t, t1:t+d});
-    t += d;
-  }
+  for(const p of parts){ const d = dur*(p.length/total); out.push({text:p,t0:t,t1:t+d}); t += d; }
   return out;
 }
 
-/* 鼠标指针 */
 function cursorAt(x, y, clicked){
   const c = $('cursor');
   c.style.transform = `translate(${x}px, ${y}px)`;
   c.classList.toggle('click', !!clicked);
 }
-function hideCursor(){ op('cursor', 0); }
 
-/* 高亮圈：套在某个元素上（stage 坐标） */
-function ringOn(el, pad){
-  if(!el){ op('ring',0); return; }
-  const r = el.getBoundingClientRect();
-  const st = $('stage').getBoundingClientRect();
-  const sx = 1920/st.width, sy = 1080/st.height;
-  const p = pad==null ? 8 : pad;
-  const rg = $('ring');
-  rg.style.left = ((r.left-st.left)*sx - p)+'px';
-  rg.style.top  = ((r.top -st.top )*sy - p)+'px';
-  rg.style.width  = (r.width*sx  + p*2)+'px';
-  rg.style.height = (r.height*sy + p*2)+'px';
+/* ==================== 静态内容构建 ==================== */
+
+/* 工具箱窗口：按配置生成一份界面 */
+const ORG_COLS = [["选",40],["相对路径",300],["大小",96],["来源整合包",180],["动作",176],["仓库目标","auto"]];
+const DUP_COLS = [["选",40],["组",40],["文件名",236],["大小",96],["路径","auto"],["修改时间",150],["建议",70]];
+
+function treeHTML(cols, rows, rowCls){
+  let h = '<table class="tree"><thead><tr>';
+  for(const [t,w] of cols) h += `<th style="${w==='auto'?'':`width:${w}px`}">${t}</th>`;
+  h += '</tr></thead><tbody>';
+  for(const r of rows){
+    h += `<tr class="${rowCls?rowCls(r):''}">`;
+    for(let i=0;i<cols.length;i++){
+      const cls = i===0 ? 'on' : (i>=1 && i<cols.length-0 && /^[A-Za-z]:\\/.test(String(r[i])) ? 'path' : '');
+      h += `<td class="${cls}">${r[i]}</td>`;
+    }
+    h += '</tr>';
+  }
+  return h + '</tbody></table>';
 }
 
-/* ==================== 场景内容 ==================== */
-const REPO = "E:\\COMFYUI_dapao\\ComfyUI\\models";
-const T1 = "H:\\ComfyUITE_20xx_20260813\\ComfyUI";
-const T2 = "F:\\ComfyUITE_2080_20260920\\ComfyUI";
+function buildTools(el, cfg){
+  const tab = cfg.tab === 'dup' ? 'dup' : 'org';
+  const cols = tab === 'dup' ? DUP_COLS : ORG_COLS;
+  const opts = cfg.opts || [true, false, true];
+  const cb = i => `<span class="cb ${opts[i]?'on':''}">${opts[i]?'✓':''}</span>`;
+  let h = '';
+  h += `<div class="titlebar">ComfyUI 模型目录映射工具 v1.1 — 整理入库 / 模型查重<span class="dots">－ □ ✕</span></div>`;
+  h += '<div class="tabs">'
+     + `<div class="tab ${tab==='org'?'on':''}">🗂 整理入库</div>`
+     + `<div class="tab ${tab==='dup'?'on':''}">🔍 模型查重</div></div>`;
+  h += '<div class="body" style="padding:10px 14px 0">';
+  if(tab === 'org'){
+    h += `<div style="display:flex;align-items:center">
+            <div style="font-size:16px;color:#444">把各整合包里「仓库还没有」的模型搬进仓库，并识别出冗余副本。</div>
+            <div class="btn primary" style="margin-left:auto">🔍 扫描分析</div></div>`;
+    h += `<div class="optrow">${cb(0)} 只处理常见模型格式（.safetensors/.ckpt/…）`
+       + `<span style="margin-left:18px">${cb(1)}</span> 对重复副本做全量 MD5 复核（更慢，零误判）`
+       + `<span style="margin-left:18px">${cb(2)}</span> 整理后自动把该整合包映射到仓库</div>`;
+  } else {
+    h += `<div style="display:flex;align-items:center">
+            <div style="font-size:16px;color:#444">按大小分组，再对同大小文件做头/中/尾采样指纹比对，找出完全相同的副本。</div>
+            <div class="btn primary" style="margin-left:auto">🔍 开始扫描</div></div>`;
+    h += `<div class="optrow">${cb(0)} 只扫描常见模型格式`
+       + `<span style="margin-left:18px">${cb(1)}</span> 对每组做全量 MD5 复核（慢，零误判）</div>`;
+  }
+  h += `<div id="${el.id}-tree" style="flex:1;overflow:hidden;margin-top:4px">`
+     + (cfg.rows && cfg.rows.length ? treeHTML(cols, cfg.rows, tab==='dup'?dupRowCls:null)
+                                    : '<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#999;font-size:19px">尚未扫描</div>')
+     + '</div>';
+  h += `<div class="tbar">
+          <div class="btn">全选</div><div class="btn">全不选</div>
+          <div class="btn ${tab==='org'?'primary':''}" style="margin-left:10px">${tab==='org'?'▶ 开始整理（勾选项）':'🗑 删除选中副本'}</div>
+          <div class="btn">取消扫描</div>
+          <div class="summ">${cfg.summary||''}</div></div>`;
+  h += '</div>';
+  h += `<div class="progwrap"><div class="prog"><i id="${el.id}-prog" style="width:${(cfg.prog||0)*100}%"></i></div>
+          <div class="tstatus">${cfg.status||'就绪'}</div></div>`;
+  el.innerHTML = h;
+}
+function dupRowCls(r){ return r[6] === '保留' ? 'sel' : ''; }
 
-const INSTALLS = [
-  {name:"ComfyUITE_20xx", path:"H:\\ComfyUITE_20xx_20260813"},
-  {name:"ComfyUITE_2080", path:"F:\\ComfyUITE_2080_20260920"},
-  {name:"comfyui_torch212", path:"E:\\ComfyUI_torch212"}
+const ORG_ROWS_SCAN = [
+  ["☑","checkpoints\\sd_xl_base.safetensors","6.94 GB","packA","<span class='a-move'>→ 移动到仓库</span>","E:\\repo\\checkpoints\\sd_xl_base.safetensors"],
+  ["☑","loras\\anime_v2.safetensors","144 MB","packA","<span class='a-dup'>≡ 重复（可删副本）</span>","E:\\repo\\loras\\anime_v2.safetensors"],
+  ["☑","checkpoints\\flux1-dev.safetensors","23.8 GB","packB","<span class='a-move'>→ 移动到仓库</span>","E:\\repo\\checkpoints\\flux1-dev.safetensors"],
+  ["☑","vae\\sdxl_vae.safetensors","335 MB","packA","<span class='a-move'>→ 移动到仓库</span>","E:\\repo\\vae\\sdxl_vae.safetensors"],
+  ["☐","checkpoints\\sd_xl_base.safetensors","6.94 GB","packB","<span class='a-dup'>≡ 重复（可删副本）</span>","E:\\repo\\checkpoints\\sd_xl_base.safetensors"],
+  ["☐","controlnet\\openpose.pth","1.45 GB","packB","<span class='a-conf'>⚠ 冲突（不动）</span>","E:\\repo\\controlnet\\openpose.pth"],
+  ["☑","loras\\anime_v2.safetensors","144 MB","packB","<span class='a-dup'>≡ 重复（可删副本）</span>","E:\\repo\\loras\\anime_v2.safetensors"],
+  ["☑","checkpoints\\dreamshaper_8.sft","2.13 GB","packB","<span class='a-move'>→ 移动到仓库</span>","E:\\repo\\checkpoints\\dreamshaper_8.sft"],
 ];
+const ORG_SUMMARY = "扫描 2 个整合包 ｜ 待移动 5 个（33.3 GB） ｜ 冗余副本 3 个（14.0 GB） ｜ 冲突 1 个";
+
+const DUP_ROWS = [
+  ["☐","1","sd_xl_base.safetensors","6.94 GB","E:\\repo\\checkpoints\\sd_xl_base.safetensors","2026-08-11 21:04","<span class='a-keep'>保留</span>"],
+  ["☑","1","sd_xl_base.safetensors","6.94 GB","H:\\packA\\ComfyUI\\models\\checkpoints\\sd_xl_base.safetensors","2026-08-11 21:04","<span class='a-del'>可删</span>"],
+  ["☐","2","flux1-dev.safetensors","23.8 GB","E:\\repo\\checkpoints\\flux1-dev.safetensors","2026-09-02 10:22","<span class='a-keep'>保留</span>"],
+  ["☑","2","flux1-dev.safetensors","23.8 GB","F:\\packB\\ComfyUI\\models\\checkpoints\\flux1-dev.safetensors","2026-09-02 10:22","<span class='a-del'>可删</span>"],
+  ["☐","3","anime_v2.safetensors","144 MB","E:\\repo\\loras\\anime_v2.safetensors","2026-07-19 14:37","<span class='a-keep'>保留</span>"],
+  ["☑","3","anime_v2.safetensors","144 MB","H:\\packA\\ComfyUI\\models\\loras\\anime_v2.safetensors","2026-07-19 14:37","<span class='a-del'>可删</span>"],
+  ["☐","4","sdxl_vae.safetensors","335 MB","E:\\repo\\vae\\sdxl_vae.safetensors","2026-06-30 09:12","<span class='a-keep'>保留</span>"],
+  ["☑","4","sdxl_vae.safetensors","335 MB","H:\\packA\\ComfyUI\\models\\vae\\sdxl_vae.safetensors","2026-06-30 09:12","<span class='a-del'>可删</span>"],
+];
+const DUP_SUMMARY = "扫描 3 个目录 / 992 个文件 ｜ 4 组重复 ｜ 可释放 38.1 GB";
+
+const EXEC_LOG = [
+  ["→ 开始整理 → E:\\repo", "step"],
+  ["  ✔ 已入库：checkpoints\\sd_xl_base.safetensors", "ok"],
+  ["  ✔ 已入库：checkpoints\\flux1-dev.safetensors", "ok"],
+  ["  ✔ 已入库：vae\\sdxl_vae.safetensors", "ok"],
+  ["  ✔ 已删冗余副本：H:\\packA\\...\\sd_xl_base.safetensors", "ok"],
+  ["  ✔ 已删冗余副本：F:\\packB\\...\\flux1-dev.safetensors", "ok"],
+  ["  ✔ 已自动映射：H:\\packA\\ComfyUI\\models", "ok"],
+  ["整理清单已保存：整理清单_20261016_1130.json", "info"],
+];
+function logHTML(lines, n){
+  const vis = lines.slice(0, n);
+  return vis.map(([t,c]) => `<div class="l-${c}">${t}</div>`).join('');
+}
 
 function buildStatic(){
+  /* 标题 pill */
+  const pills = ["🗂 整理入库","🔍 MD5 查重","🔗 目录映射"];
+  $('t-pills').innerHTML = pills.map((p,i)=>
+    `<div class="pill" id="tp${i}" style="opacity:0">${p}</div>`).join('');
+
   /* 痛点卡片 */
-  html('p-cards', INSTALLS.map((it,i)=>`
-    <div class="card" id="pc${i}" style="flex:1;padding:30px 26px;opacity:0">
-      <div style="font-size:22px;color:#0078d4;font-weight:700">整合包 ${i+1}</div>
-      <div class="mono" style="font-size:17px;color:#666;margin-top:10px;
-           overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${it.path}</div>
-      <div style="margin-top:22px;display:flex;align-items:center;gap:12px">
-        <div style="width:44px;height:36px;background:#f3d07a;border:2px solid #c9a227;border-radius:4px"></div>
-        <div><div style="font-size:19px;color:#333">models</div>
-             <div style="font-size:15px;color:#888">829 GB 副本</div></div>
+  const cards = [
+    ["packA","H:\\ComfyUITE_20xx","812 GB","checkpoints / loras / vae / controlnet"],
+    ["packB","F:\\ComfyUITE_2080","806 GB","checkpoints / loras / vae / controlnet"],
+    ["仓库","E:\\COMFYUI_dapao","829 GB","checkpoints / loras / vae / controlnet"],
+  ];
+  $('p-cards').innerHTML = cards.map((c,i)=>`
+    <div class="chip" id="pc${i}" style="opacity:0;width:480px;padding:18px 20px">
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <div style="font-size:22px;font-weight:700">${c[0]}</div>
+        <div style="font-family:Consolas,monospace;font-size:15px;color:#777">${c[1]}</div>
       </div>
-    </div>`).join(''));
+      <div style="margin-top:10px;font-size:15px;color:#555">${c[3]}</div>
+      <div style="margin-top:12px;display:flex;align-items:center;gap:10px">
+        <div style="flex:1;height:16px;background:#e6eaf0;border-radius:8px;overflow:hidden">
+          <div style="height:100%;width:${c[2]==='829 GB'?100:98}%;background:${c[0]==='仓库'?'#107c41':'#c02626'};border-radius:8px"></div>
+        </div>
+        <div class="num" style="font-size:20px;color:${c[0]==='仓库'?'#107c41':'#c02626'}">${c[2]}</div>
+      </div>
+    </div>`).join('');
 
-  /* 目录联接：左侧三个链接图标 */
-  html('c-left', [T1,T2,"更多整合包…"].map((p,i)=>`
-    <div class="card" id="cl${i}" style="padding:20px 22px;opacity:0">
-      <div style="font-size:15px;color:#0078d4;font-weight:700">目录联接 (Junction)</div>
-      <div class="mono" style="font-size:16px;color:#333;margin-top:8px;
-           overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p}</div>
-    </div>`).join(''));
+  /* 工具箱各场景 */
+  buildTools($('tools-entry'), {tab:'org', rows:[], summary:'', status:'就绪', prog:0});
+  buildTools($('tools-opt'),   {tab:'org', rows:[], summary:'', status:'就绪', prog:0});
+  buildTools($('tools-scan'),  {tab:'org', rows:ORG_ROWS_SCAN, summary:ORG_SUMMARY, status:'扫描完成', prog:0});
+  buildTools($('tools-conf'),  {tab:'org', rows:ORG_ROWS_SCAN, summary:ORG_SUMMARY, status:'等待确认…', prog:0});
+  buildTools($('tools-exec'),  {tab:'org', rows:ORG_ROWS_SCAN, summary:ORG_SUMMARY, status:'整理中 3/8', prog:0.38});
+  buildTools($('tools-dup'),   {tab:'dup', rows:DUP_ROWS, summary:DUP_SUMMARY, status:'查重完成', prog:0});
+  buildTools($('tools-del'),   {tab:'dup', rows:DUP_ROWS, summary:DUP_SUMMARY, status:'删除完成（成功 4 / 失败 0）', prog:1});
 
-  html('c-right', `
-    <div class="card" style="padding:34px 30px;border:3px solid #107c41">
-      <div style="font-size:22px;color:#107c41;font-weight:800">真实模型仓库</div>
-      <div class="mono" style="font-size:19px;color:#222;margin-top:12px">E:\\COMFYUI_dapao\\ComfyUI\\models</div>
-      <div style="margin-top:20px;font-size:44px;font-weight:800;color:#107c41">829 GB</div>
-      <div style="font-size:16px;color:#666;margin-top:6px">106 个子目录 · 989 个文件</div>
-    </div>`);
+  /* 执行场景的日志 */
+  $('tools-exec').querySelector('.body').insertAdjacentHTML('beforeend',
+    `<div class="log" id="exec-log" style="height:150px"></div>`);
 
-  /* 工具介绍卡片 */
-  html('i-cards', [
-    ["① 统一链接","把每个整合包的 models，链接到同一个仓库"],
-    ["② 无需管理员","用目录联接 Junction，普通权限即可创建"],
-    ["③ 零依赖","单文件 Python，不需要 pip install"]
-  ].map(([t,d],i)=>`
-    <div class="card" id="ic${i}" style="flex:1;padding:34px 30px;opacity:0;border-top:5px solid #0078d4">
-      <div style="font-size:30px;font-weight:700;color:#1a1a1a">${t}</div>
-      <div style="font-size:20px;color:#555;margin-top:16px;line-height:1.6">${d}</div>
-    </div>`).join(''));
+  /* 确认弹窗内容 */
+  $('cf-body').textContent =
+    "模型仓库：E:\\repo\n\n" +
+    "即将执行：\n" +
+    "  • 移动 5 个文件进仓库（共 33.3 GB）\n" +
+    "  • 删除 3 个冗余副本（仓库里已有一模一样的，共 14.0 GB）\n\n" +
+    "这是【会移动/删除文件】的操作，请务必确认上方清单。\n" +
+    "所有被删除的文件内容都已确认与仓库中的版本完全一致（指纹相同）。";
 
-  /* 安全清单 */
+  /* 查重原理图 */
+  const files = [
+    ["sd_xl_base.safetensors","6.94 GB",0],["sd_xl_base.safetensors","6.94 GB",1],
+    ["anime_v2.safetensors","144 MB",0],["sdxl_vae.safetensors","335 MB",0],
+    ["flux1-dev.safetensors","23.8 GB",0],["openpose.pth","1.45 GB",0],
+  ];
+  $('d-files').innerHTML = files.map((f,i)=>
+    `<div class="chip" id="df${i}" style="opacity:0">${f[0]}<span class="sz">${f[1]}</span></div>`).join('');
+  const buckets = [
+    ["6.94 GB",["#1","#2"],1],["144 MB",["#3"],0],["335 MB",["#4"],0],
+    ["23.8 GB",["#5"],0],["1.45 GB",["#6"],0],
+  ];
+  $('d-buckets').innerHTML = buckets.map((b,i)=>`
+    <div class="bucket ${b[2]?'hot':''}" id="db${i}" style="opacity:0">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="num" style="font-size:20px">${b[0]}</div>
+        <div style="font-size:15px;color:#666">${b[1].length} 个文件</div>
+        ${b[2]?'<div class="badge same" style="margin-left:auto">可能重复</div>':''}
+      </div>
+      <div style="margin-top:6px;font-size:14px;color:#888;font-family:Consolas,monospace">${b[1].join('  ')}</div>
+    </div>`).join('');
+  const fps = [
+    ["#1","#2","头 1MB + 中 1MB + 尾 1MB","指纹相同",1],
+    ["#3","—","组内只有 1 个，直接排除","无需比对",0],
+    ["#4","—","组内只有 1 个，直接排除","无需比对",0],
+  ];
+  $('d-fp').innerHTML = fps.map((f,i)=>`
+    <div class="bucket ${f[3]?'hot':''}" id="dp${i}" style="opacity:0">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="num" style="font-size:19px">${f[0]} ${f[1]!=='—'?'vs '+f[1]:''}</div>
+        <div style="font-size:14px;color:#666">${f[2]}</div>
+      </div>
+      <div class="fpbar"><i class="h"></i><i class="h"></i><i class="h"></i></div>
+      <div style="margin-top:8px"><span class="badge ${f[3]?'same':'diff'}">${f[3]}</span></div>
+    </div>`).join('');
+  $('d-ar1').innerHTML = arrowSVG();
+  $('d-ar2').innerHTML = arrowSVG();
+
+  /* 安全列表 */
   const items = [
-    "只创建和删除链接本身，不移动、不复制、不删除模型数据",
-    "目标非空时自动改名备份为 models_backup_时间戳，而不是删除",
-    "删除链接只用 os.rmdir，物理上无法递归删到目标内容",
-    "非链接路径拒绝删除，映射失败自动回滚"
+    ["默认不执行","扫描只是分析，勾选并确认清单之后才动手"],
+    ["逐项列清单","搬几个、删几个、各占多少空间，执行前全部列明"],
+    ["跨盘先查空间","搬运前检查目标盘剩余空间，不够就明确警告"],
+    ["冲突不自动处理","同名不同内容的文件一律不动，列出来等你确认"],
+    ["删除前再校验","删冗余副本前比对指纹，可选全量 MD5 复核"],
+    ["全程可回溯","运行日志 + 整理清单 JSON，记录从哪搬到哪、删了哪个"],
   ];
-  html('s-list', items.map((t,i)=>`
-    <div class="card" id="sl${i}" style="display:flex;gap:20px;align-items:flex-start;
-         padding:22px 26px;opacity:0;border-left:6px solid #107c41">
-      <div style="font-size:28px;color:#107c41;font-weight:800">✓</div>
-      <div style="font-size:26px;color:#222;line-height:1.5">${t}</div>
-    </div>`).join(''));
+  $('s-list').innerHTML = items.map((it,i)=>`
+    <div style="display:flex;align-items:flex-start;gap:18px" id="sl${i}">
+      <div style="flex:0 0 44px;height:44px;border-radius:12px;background:var(--accent);
+                  color:#fff;font-size:24px;font-weight:800;display:flex;align-items:center;
+                  justify-content:center">${i+1}</div>
+      <div><div style="font-size:27px;font-weight:700;color:#1a1a1a">${it[0]}</div>
+           <div style="font-size:20px;color:#555;margin-top:4px">${it[1]}</div></div>
+    </div>`).join('');
 
-  /* 技术对比表 */
-  const rows = [
-    ["管理员权限","通常 需要","不需要"],
-    ["跨盘支持（H 盘 → E 盘）","支持","支持"],
-    ["对程序透明","是","是"],
-    ["要求目标存在","否","建议存在"]
-  ];
-  html('tc-table', `
-    <table class="tree" style="font-size:25px">
-      <thead><tr><th style="width:520px">对比项</th><th style="width:460px">/D 符号链接</th>
-        <th style="width:460px;background:#e8f5ec;color:#107c41">/J 目录联接 ✓</th></tr></thead>
-      <tbody>${rows.map((r,i)=>`<tr id="tr${i}" style="opacity:0">
-        <td style="padding:16px 18px">${r[0]}</td>
-        <td style="padding:16px 18px;color:#777">${r[1]}</td>
-        <td style="padding:16px 18px;background:#f4fbf6;color:#107c41;font-weight:700">${r[2]}</td>
-      </tr>`).join('')}</tbody></table>`);
-
-  /* SVG 箭头 */
-  const svg = $('c-svg');
-  svg.innerHTML = [0,1,2].map(i=>{
-    const y = 55 + i*82;
-    return `<path id="ar${i}" d="M8 ${y} C 110 ${y}, 150 165, 288 165"
-      fill="none" stroke="#0078d4" stroke-width="4" stroke-linecap="round"
-      stroke-dasharray="1 1" opacity="0"/>
-      <circle id="ah${i}" cx="288" cy="165" r="7" fill="#0078d4" opacity="0"/>`;
-  }).join('');
+  /* 应用日志 */
+  $('app-log').innerHTML =
+    `<div class="l-step">[10:31:02] → 开始映射 → E:\COMFYUI_dapao\ComfyUI\models</div>` +
+    `<div class="l-ok">[10:31:02] ✔ 映射成功 → E:\COMFYUI_dapao\ComfyUI\models</div>` +
+    `<div>[10:31:02] 完成：成功 1 项，失败 0 项</div>`;
 }
 
-/* 表格行渲染 */
-let _rowsKey = "";
-function setRows(rows){
-  const key = JSON.stringify(rows);
-  if(key === _rowsKey) return;
-  _rowsKey = key;
-  $('tree-body').innerHTML = rows.map(r=>`
-    <tr class="${r.sel?'sel':''}">
-      <td class="on">${r.on}</td>
-      <td class="path">${r.path}</td>
-      <td class="state ${r.mapped?'mapped':''}">${r.state}</td>
-      <td class="path">${r.target||''}</td>
-    </tr>`).join('');
+function arrowSVG(){
+  return `<svg width="56" height="120" viewBox="0 0 56 120">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6"
+      orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#0078d4"
+      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+    <line x1="6" y1="60" x2="44" y2="60" stroke="#0078d4" stroke-width="3"
+      stroke-dasharray="7 6" marker-end="url(#ah)"/></svg>`;
 }
 
-const LOG_MAP = [
-  '<span class="l-step">→ 开始映射 → E:\\COMFYUI_dapao\\ComfyUI\\models</span>',
-  '[backup] H:\\ComfyUITE_20xx_20260813\\ComfyUI\\models',
-  '　原目录已备份为：models_backup_20260927_105102',
-  '<span class="l-ok">　✔ 映射成功 → E:\\COMFYUI_dapao\\ComfyUI\\models</span>',
-  '[backup] F:\\ComfyUITE_2080_20260920\\ComfyUI\\models',
-  '　原目录已备份为：models_backup_20260927_105103',
-  '<span class="l-ok">　✔ 映射成功 → E:\\COMFYUI_dapao\\ComfyUI\\models</span>',
-  '<span class="l-ok">完成：成功 2 项，失败 0 项</span>'
-];
-const LOG_SCAN = [
-  '<span class="l-step">→ 开始自动扫描各盘符下的 ComfyUI …</span>',
-  '<span class="l-ok">✔ 已添加目标：H:\\ComfyUITE_20xx_20260813\\ComfyUI</span>',
-  '<span class="l-ok">✔ 已添加目标：F:\\ComfyUITE_2080_20260920\\ComfyUI</span>',
-  '<span class="l-ok">✔ 扫描完成，发现 2 个，新增 2 条</span>'
-];
-const LOG_RESTORE = [
-  '<span class="l-step">→ 开始一键还原</span>',
-  '<span class="l-ok">✔ 已还原：models_backup_20260927_105102 → models</span>',
-  '<span class="l-ok">✔ 已还原：models_backup_20260927_105103 → models</span>'
-];
-let _logKey = "";
-function setLog(lines){
-  const key = lines.join('|');
-  if(key === _logKey) return;
-  _logKey = key;
-  $('log').innerHTML = lines.map(l=>`<div>${l}</div>`).join('');
-}
-
-/* ==================== 各镜头 ==================== */
+/* ==================== 镜头 ==================== */
 const SCENES = {
-  /* 1 标题 */
-  title(lt, dur){
-    const a = fi(lt, .8);
-    op('sc-title', a);
-    $('t-kick').style.transform = `translateY(${(1-a)*22}px)`;
-    $('t-h1').style.transform   = `translateY(${(1-a)*30}px)`;
-    $('t-sub').style.transform  = `translateY(${(1-a)*38}px)`;
-    hideCursor();
-    return FOCUS(960, 540, lerp(1.10, 1.0, ease(seg(lt,0,2.2))));
+
+  title(lt){
+    op('t-kick', fi(lt,.4)); op('t-h1', ease(seg(lt,.15,.9))); op('t-sub', ease(seg(lt,.5,1.2)));
+    for(let i=0;i<3;i++) op('tp'+i, ease(seg(lt,.9+i*.25, 1.5+i*.25)));
+    return FOCUS(960,540, lerp(1.12,1.0, ease(seg(lt,0,2.0))));
   },
 
-  /* 2 痛点 */
-  problem(lt, dur){
-    op('sc-problem', fi(lt,.5)); hideCursor();
-    for(let i=0;i<3;i++) op('pc'+i, ease(seg(lt, .6+i*1.5, 1.4+i*1.5)));
-    const t = seg(lt, 5.6, 7.4);
+  problem(lt){
+    for(let i=0;i<3;i++) op('pc'+i, ease(seg(lt,.6+i*.4, 1.4+i*.4)));
+    const t = ease(seg(lt, 4.0, 6.5));
     op('p-total', t);
-    $('p-bar').style.width = (ease(t)*100).toFixed(1)+'%';
-    const n = Math.round(lerp(0.8, 2.4, ease(t))*10)/10;
-    txt('p-num', n.toFixed(1)+' TB');
-    return FOCUS(960, 540, lerp(1.06, 1.0, ease(seg(lt,0,1.6))));
+    txt('p-num', (lerp(0, 1618, t)).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' GB');
+    $('p-bar').style.width = (t*100).toFixed(1) + '%';
+    return FOCUS(960, 560, lerp(1.05,1.0, ease(seg(lt,0,1.6))) * lerp(1,1.05, ease(seg(lt,7,16))));
   },
 
-  /* 3 目录联接 */
-  concept(lt, dur){
-    op('sc-concept', fi(lt,.5)); hideCursor();
-    for(let i=0;i<3;i++){
-      const a = ease(seg(lt, .5+i*1.3, 1.3+i*1.3));
-      op('cl'+i, a);
-      const el = $('cl'+i); if(el) el.style.transform = `translateX(${(1-a)*40}px)`;
+  entry(lt){
+    op('app', ease(seg(lt,.2,1.0)));
+    /* 高亮新按钮 */
+    const b = $('btn-tools').getBoundingClientRect();
+    const ring = $('e-ring');
+    const rl = b.left + (b.width-300)/2, rt = b.top - 6;
+    ring.style.left = rl+'px'; ring.style.top = rt+'px';
+    ring.style.width = '300px'; ring.style.height = '42px';
+    op('e-ring', ease(seg(lt,1.4,2.0)) * (lt>5.2?0:1));
+    /* 光标移过去点击 */
+    const c1 = ease(seg(lt,2.0,3.0));
+    cursorAt(lerp(700, rl+150, c1), lerp(600, rt+21, c1), seg(lt,3.0,3.4)>.5 && lt<3.9);
+    op('cursor', ease(seg(lt,1.8,2.2)));
+    /* 工具箱弹出 */
+    const tw = ease(seg(lt, 4.0, 4.9));
+    op('tools-entry', tw);
+    $('tools-entry').style.transform = `translateY(${(1-tw)*26}px) scale(${lerp(.97,1,tw)})`;
+    op('app', 1 - tw*0.55);
+    return FOCUS(lerp(890,960,ease(seg(lt,3.4,5.0))), lerp(470,464,ease(seg(lt,3.4,5.0))),
+                lerp(1.0,1.02,ease(seg(lt,3.4,5.0))));
+  },
+
+  orgtab(lt){
+    op('tools-opt', fi(lt,.5));
+    /* 逐个点亮三个选项 */
+    const cbs = $('tools-opt').querySelectorAll('.optrow .cb');
+    for(let i=0;i<cbs.length;i++){
+      const on = ease(seg(lt, 1.2+i*0.9, 2.1+i*0.9));
+      cbs[i].style.background = on>.5 ? 'var(--accent)' : '#fff';
+      cbs[i].style.borderColor = on>.5 ? 'var(--accent-deep)' : '#8a9099';
+      cbs[i].textContent = on>.5 ? '✓' : '';
     }
-    for(let i=0;i<3;i++){
-      const a = ease(seg(lt, 4.6+i*0.9, 5.6+i*0.9));
-      const p = $('ar'+i);
-      if(p){
-        const len = 400;
-        p.setAttribute('stroke-dasharray', len);
-        p.setAttribute('stroke-dashoffset', len*(1-ease(a)));
-        p.setAttribute('opacity', a>0.02?1:0);
-      }
-      const h = $('ah'+i); if(h) h.setAttribute('opacity', ease(seg(lt, 5.6+i*0.9, 6.2+i*0.9)));
+    return FOCUS(960, 464, lerp(1.0,1.02, ease(seg(lt,0,1.4))) * lerp(1,1.015, ease(seg(lt,5,13))));
+  },
+
+  orgscan(lt){
+    op('tools-scan', fi(lt,.4));
+    const rows = $('tools-scan').querySelectorAll('table.tree tbody tr');
+    const n = Math.round(ease(seg(lt,.8,8.0))*rows.length);
+    for(let i=0;i<rows.length;i++){
+      rows[i].style.opacity = i < n ? 1 : 0;
     }
-    op('c-right', ease(seg(lt, 4.2, 5.4)));
-    op('c-note', ease(seg(lt, 7.4, 8.4)));
-    return FOCUS(960, 540, 1.0);
+    return FOCUS(960, 464, lerp(1.02,1.0, ease(seg(lt,0,1.4))));
   },
 
-  /* 4 工具介绍 */
-  intro(lt, dur){
-    op('sc-intro', fi(lt,.5)); hideCursor();
-    for(let i=0;i<3;i++) op('ic'+i, ease(seg(lt, .8+i*1.4, 1.8+i*1.4)));
-    return FOCUS(960, 540, lerp(1.05,1.0, ease(seg(lt,0,1.4))));
-  },
-
-  /* 5 安全机制 */
-  safety(lt, dur){
-    op('sc-safety', fi(lt,.5)); hideCursor();
-    for(let i=0;i<4;i++) op('sl'+i, ease(seg(lt, .8+i*2.0, 1.9+i*2.0)));
-    return FOCUS(960, 540, 1.0);
-  },
-
-  /* 6 启动：显示应用窗口 */
-  launch(lt, dur){
-    op('sc-app', fi(lt,.5));
-    op('app', ease(seg(lt, .3, 1.4)));
-    $('app').style.transform = `translateY(${(1-ease(seg(lt,.3,1.4)))*34}px)`;
-    txt('repo-entry',''); txt('repo-info','未选择');
-    setRows([]); setLog([]); txt('status','就绪');
-    $('grp-repo').classList.remove('hot');
-    $('grp-list').classList.remove('hot');
-    op('ring',0); op('modal',0); hideCursor();
-    return FOCUS(960, 540, lerp(1.06,1.0, ease(seg(lt,0,1.6))));
-  },
-
-  /* 7 选仓库 */
-  'app-repo'(lt, dur){
-    op('sc-app', 1); op('app', 1); $('app').style.transform='';
-    const typeT = seg(lt, .4, 2.6);
-    const s = REPO;
-    txt('repo-entry', s.slice(0, Math.round(s.length*typeT)));
-    $('grp-repo').classList.add('hot');
-    $('grp-list').classList.remove('hot');
-
-    /* 点检测信息 */
-    const c1 = seg(lt, 3.0, 4.2);          /* 移动到按钮 */
-    const c2 = seg(lt, 4.2, 4.8);          /* 按下 */
-    const r = $('btn-detect').getBoundingClientRect();
-    const st = $('stage').getBoundingClientRect();
-    const sx = 1920/st.width;
-    const bx = (r.left+r.width/2-st.left)*sx, by=(r.top+r.height/2-st.top)*sx;
-    op('cursor', ease(seg(lt,2.8,3.3)));
-    cursorAt(lerp(700,bx,ease(c1)), lerp(560,by,ease(c1)), c2>0.05 && c2<0.95);
-    $('btn-detect').classList.toggle('pressed', c2>0.1 && c2<0.9);
-
-    if(lt > 4.8){
-      txt('repo-info','子目录 106 个 ｜ 文件 989 个 ｜ 约 829.28 GB');
-      $('repo-info').className = 'info ok';
-    }
-    ringOn($('grp-repo'), 10);
-    op('ring', ease(seg(lt,.3,1.0)) * (lt>5.6 ? 0 : 1));
-    op('modal',0); setRows([]); setLog([]);
-    return FOCUS(960, 430, 1.06);
-  },
-
-  /* 8 自动扫描 */
-  'app-scan'(lt, dur){
-    op('sc-app',1); op('app',1); $('app').style.transform='';
-    txt('repo-entry', REPO);
-    txt('repo-info','子目录 106 个 ｜ 文件 989 个 ｜ 约 829.28 GB');
-    $('grp-repo').classList.remove('hot');
-    $('grp-list').classList.add('hot');
-    $('btn-detect').classList.remove('pressed');
-
-    const r = $('btn-scan').getBoundingClientRect();
-    const st = $('stage').getBoundingClientRect();
-    const sx = 1920/st.width;
-    const bx = (r.left+r.width/2-st.left)*sx, by=(r.top+r.height/2-st.top)*sx;
-    const c1 = seg(lt, .8, 2.0), c2 = seg(lt, 2.0, 2.6);
-    op('cursor', ease(seg(lt,.6,1.0)));
-    cursorAt(lerp(760,bx,ease(c1)), lerp(600,by,ease(c1)), c2>0.05&&c2<0.95);
-    $('btn-scan').classList.toggle('pressed', c2>0.1&&c2<0.9);
-
-    const n = lt>2.8 ? (lt>4.2 ? 2 : 1) : 0;
-    const rows = [];
-    if(n>=1) rows.push({on:'☑', path:T1, state:'● 真实目录（33 项 / 167.87 MB）', sel:false});
-    if(n>=2) rows.push({on:'☑', path:T2, state:'● 真实目录（109 项 / 829.28 GB）', sel:false});
-    setRows(rows);
-
-    const ln = lt>2.9 ? (lt>3.3?(lt>3.8?(lt>4.4?4:3):2):1) : 0;
-    setLog(LOG_SCAN.slice(0, ln));
-    txt('status', ln>0 ? '正在扫描…' : '就绪');
-    ringOn($('grp-list'), 10);
-    op('ring', ease(seg(lt,.2,.9)) * (lt>5.2?0:1));
-    op('modal',0);
-    return FOCUS(960, 560, 1.05);
-  },
-
-  /* 9 状态与勾选 */
-  'app-list'(lt, dur){
-    op('sc-app',1); op('app',1);
-    txt('repo-entry', REPO);
-    txt('repo-info','子目录 106 个 ｜ 文件 989 个 ｜ 约 829.28 GB');
-    $('grp-repo').classList.remove('hot');
-    $('grp-list').classList.add('hot');
-    $('btn-scan').classList.remove('pressed');
-    setRows([
-      {on:'☑', path:T1, state:'● 真实目录（33 项 / 167.87 MB）', sel:lt>3.6},
-      {on:'☑', path:T2, state:'● 真实目录（109 项 / 829.28 GB）', sel:lt>3.6}
-    ]);
-    setLog(LOG_SCAN); txt('status','就绪');
-
-    /* 指向状态列 */
-    const r = $('grp-list').getBoundingClientRect();
-    const st = $('stage').getBoundingClientRect();
-    const sx = 1920/st.width, sy = 1080/st.height;
-    const tx = (r.left-st.left)*sx + r.width*sx*0.60;
-    const ty = (r.top-st.top)*sy + 210*sy;
-    op('cursor', ease(seg(lt,1.0,1.5)) * (lt>5.6?0:1));
-    cursorAt(lerp(700,tx,ease(seg(lt,1.2,2.8))), lerp(600,ty,ease(seg(lt,1.2,2.8))), false);
-    ringOn($('grp-list'), 10);
-    op('ring', ease(seg(lt,.2,.9)) * (lt>6.0?0:1));
-    op('modal',0);
-    return FOCUS(960, 620, 1.16);
-  },
-
-  /* 10 确认清单 */
-  'app-confirm'(lt, dur){
-    op('sc-app',1); op('app',1);
-    txt('repo-entry', REPO);
-    txt('repo-info','子目录 106 个 ｜ 文件 989 个 ｜ 约 829.28 GB');
-    $('grp-repo').classList.remove('hot');
-    $('grp-list').classList.remove('hot');
-    setRows([
-      {on:'☑', path:T1, state:'● 真实目录（33 项 / 167.87 MB）', sel:true},
-      {on:'☑', path:T2, state:'● 真实目录（109 项 / 829.28 GB）', sel:true}
-    ]);
-    txt('status','就绪');
-
-    /* 先点开始映射 */
-    const r = $('btn-map').getBoundingClientRect();
-    const st = $('stage').getBoundingClientRect();
-    const sx = 1920/st.width;
-    const bx=(r.left+r.width/2-st.left)*sx, by=(r.top+r.height/2-st.top)*sx;
-    if(lt < 2.6){
-      op('cursor', ease(seg(lt,.4,.9)));
-      cursorAt(lerp(720,bx,ease(seg(lt,.6,1.8))), lerp(700,by,ease(seg(lt,.6,1.8))), lt>1.9&&lt<2.4);
-      $('btn-map').classList.toggle('pressed', lt>1.9&&lt<2.5);
-    } else {
-      hideCursor();
-      $('btn-map').classList.remove('pressed');
-    }
-    ringOn($('btn-map'), 8);
-    op('ring', lt<2.6 ? ease(seg(lt,.3,1.1)) : 0);
-
-    /* 弹窗 */
-    const m = ease(seg(lt, 2.7, 3.4));
+  orgconfirm(lt){
+    op('tools-conf', fi(lt,.4));
+    const m = ease(seg(lt,1.0,1.7));
     op('modal', m);
-    $('modal').style.pointerEvents = m>0.5?'auto':'none';
-    html('modal-body',
-`模型仓库（源）：
-  ${REPO}
+    $('modal').querySelector('.box').style.transform = `translateY(${(1-m)*22}px)`;
+    const okc = ease(seg(lt,3.2,3.8));
+    const okBtn = $('cf-ok');
+    okBtn.style.background = okc>.5 ? 'var(--accent-deep)' : 'var(--accent)';
+    cursorAt(lerp(1400,1450,ease(seg(lt,2.6,3.4))), lerp(760,795,ease(seg(lt,2.6,3.4))),
+             seg(lt,3.4,3.8)>.5 && lt<4.4);
+    op('cursor', ease(seg(lt,2.2,2.6)));
+    return FOCUS(960, 500, lerp(1.0, 1.03, ease(seg(lt,5.0,16.5))));
+  },
 
-即将执行的操作：
+  orgexec(lt){
+    op('tools-exec', fi(lt,.4));
+    const n = Math.round(ease(seg(lt,.8,9.5))*EXEC_LOG.length);
+    html('exec-log', logHTML(EXEC_LOG, Math.max(1,n)));
+    const p = ease(seg(lt,.8,10.0));
+    const prog = $('tools-exec-prog');
+    if(prog) prog.style.width = (p*100).toFixed(1)+'%';
+    return FOCUS(960, 464, lerp(1.02,1.0, ease(seg(lt,0,1.4))));
+  },
 
-  • [改名备份后建链接] ${T1}\\models
-      备份为：models_backup_20260927_105102
+  dupconcept(lt){
+    for(let i=0;i<6;i++) op('df'+i, ease(seg(lt,.6+i*.45, 1.5+i*.45)));
+    for(let i=0;i<5;i++) op('db'+i, ease(seg(lt,5.0+i*.8, 6.1+i*.8)));
+    for(let i=0;i<3;i++) op('dp'+i, ease(seg(lt,11.5+i*.9, 12.8+i*.9)));
+    op('d-note', ease(seg(lt,17.0,18.5)));
+    return FOCUS(960, 520, lerp(1.04,1.0, ease(seg(lt,0,1.4))) * lerp(1,1.06, ease(seg(lt,16,24))));
+  },
 
-  • [改名备份后建链接] ${T2}\\models
-      备份为：models_backup_20260927_105103
+  dupscan(lt){
+    op('tools-dup', fi(lt,.4));
+    const rows = $('tools-dup').querySelectorAll('table.tree tbody tr');
+    const n = Math.round(ease(seg(lt,.7,7.0))*rows.length);
+    for(let i=0;i<rows.length;i++) rows[i].style.opacity = i < n ? 1 : 0;
+    return FOCUS(960, 464, lerp(1.02,1.0, ease(seg(lt,0,1.4))));
+  },
 
-说明：本操作不移动、不复制、不删除任何模型文件。`);
-
-    if(lt > 6.2){
-      const r2 = $('modal-ok').getBoundingClientRect();
-      const bx2=(r2.left+r2.width/2-st.left)*sx, by2=(r2.top+r2.height/2-st.top)*sx;
-      op('cursor', ease(seg(lt,6.2,6.8)));
-      cursorAt(lerp(1100,bx2,ease(seg(lt,6.4,7.6))), lerp(900,by2,ease(seg(lt,6.4,7.6))), lt>7.8&&lt<8.4);
+  dupdelete(lt){
+    op('tools-del', fi(lt,.4));
+    op('cursor', ease(seg(lt,.4,.9)));
+    const rows = $('tools-del').querySelectorAll('table.tree tbody tr');
+    /* 被勾选的行逐个飞向回收站 */
+    const fly = ease(seg(lt,1.6,8.0));
+    for(let i=0;i<rows.length;i++){
+      const isDel = rows[i].children[6] && rows[i].children[6].textContent.indexOf('可删')>=0;
+      const k = clamp01((fly - (i%4)*0.14)/0.5);
+      if(isDel){
+        rows[i].style.opacity = (1-k).toFixed(2);
+        rows[i].style.transform = `translate(${(k*260).toFixed(0)}px, ${(k*130).toFixed(0)}px) scale(${lerp(1,.55,k)})`;
+      }
     }
-    return FOCUS(960, 540, 1.0);
+    op('bin', ease(seg(lt,1.2,1.9)));
+    const f = ease(seg(lt,6.5,9.0));
+    op('freed', f);
+    txt('freed-num', lerp(0,38.1,f).toFixed(1) + ' GB');
+    cursorAt(lerp(1200,1560,ease(seg(lt,1.0,2.0))), lerp(700,880,ease(seg(lt,1.0,2.0))),
+             seg(lt,2.0,2.4)>.5 && lt<3.0);
+    return FOCUS(960, 464, 1.0);
   },
 
-  /* 11 映射完成 */
-  'app-result'(lt, dur){
-    op('sc-app',1); op('app',1);
-    op('modal',0); hideCursor();
-    $('modal').style.pointerEvents='none';
-    txt('repo-entry', REPO);
-    txt('repo-info','子目录 106 个 ｜ 文件 989 个 ｜ 约 829.28 GB');
-    $('grp-repo').classList.remove('hot');
-    $('grp-list').classList.remove('hot');
-    const n = lt>1.6 ? 2 : 1;
-    const rows = [
-      {on:'☑', path:T1, state:'● 真实目录（33 项 / 167.87 MB）'}
-    ];
-    if(n>1) rows[0] = {on:'☑', path:T1, state:'✔ 已映射', mapped:true, target:REPO};
-    if(lt>3.4) rows.push({on:'☑', path:T2, state:'✔ 已映射', mapped:true, target:REPO});
-    else if(lt>1.6) rows.push({on:'☑', path:T2, state:'● 真实目录（109 项 / 829.28 GB）'});
-    setRows(rows);
-    const ln = Math.min(LOG_MAP.length, Math.floor(seg(lt,.6,7.0)*LOG_MAP.length)+1);
-    setLog(LOG_MAP.slice(0, ln));
-    txt('status', ln>=LOG_MAP.length ? '映射完成（成功 2 / 失败 0）' : '正在映射…');
-    op('ring',0);
-    return FOCUS(960, 620, 1.10);
+  safety(lt){
+    for(let i=0;i<6;i++) op('sl'+i, ease(seg(lt,.5+i*.55, 1.2+i*.55)));
+    return FOCUS(960, 540, lerp(1.05,1.0, ease(seg(lt,0,1.4))) * lerp(1,1.05, ease(seg(lt,5,11))));
   },
 
-  /* 12 还原 */
-  'app-restore'(lt, dur){
-    op('sc-app',1); op('app',1); op('modal',0);
-    $('modal').style.pointerEvents='none';
-    txt('repo-entry', REPO);
-    txt('repo-info','子目录 106 个 ｜ 文件 989 个 ｜ 约 829.28 GB');
-    $('grp-repo').classList.remove('hot');
-    $('grp-list').classList.remove('hot');
-    setRows([
-      {on:'☑', path:T1, state:'✔ 已映射', mapped:true, target:REPO, sel:true},
-      {on:'☑', path:T2, state:'✔ 已映射', mapped:true, target:REPO, sel:true}
-    ]);
-    setLog(LOG_MAP); txt('status','映射完成（成功 2 / 失败 0）');
-
-    const r = $('btn-restore').getBoundingClientRect();
-    const st = $('stage').getBoundingClientRect();
-    const sx = 1920/st.width;
-    const bx=(r.left+r.width/2-st.left)*sx, by=(r.top+r.height/2-st.top)*sx;
-    if(lt<3.0){
-      op('cursor', ease(seg(lt,.3,.8)));
-      cursorAt(lerp(700,bx,ease(seg(lt,.5,1.8))), lerp(700,by,ease(seg(lt,.5,1.8))), lt>1.9&&lt<2.4);
-      $('btn-restore').classList.toggle('pressed', lt>1.9&&lt<2.6);
-    } else { hideCursor(); $('btn-restore').classList.remove('pressed'); }
-    ringOn($('btn-restore'), 8);
-    op('ring', lt<3.0 ? ease(seg(lt,.2,1.0)) : 0);
-
-    if(lt>3.4) setLog(LOG_RESTORE);
-    if(lt>4.4) txt('status','还原完成');
-    if(lt>4.4) setRows([
-      {on:'☑', path:T1, state:'● 真实目录（已还原）', sel:true},
-      {on:'☑', path:T2, state:'● 真实目录（已还原）', sel:true}
-    ]);
-    return FOCUS(960, 620, 1.08);
+  outro(lt){
+    op('o-h1', fi(lt,.5)); op('o-sub', ease(seg(lt,.4,1.0)));
+    op('o-url', ease(seg(lt,1.0,1.8))); op('o-star', ease(seg(lt,2.2,3.2)));
+    return FOCUS(960,540, lerp(1.08,1.0, ease(seg(lt,0,1.8))));
   },
-
-  /* 13 技术对比 */
-  tech(lt, dur){
-    op('sc-tech', fi(lt,.5)); hideCursor(); op('ring',0);
-    for(let i=0;i<4;i++) op('tr'+i, ease(seg(lt, .8+i*1.6, 1.9+i*1.6)));
-    op('tc-note', ease(seg(lt, 8.0, 9.0)));
-    return FOCUS(960, 540, 1.0);
-  },
-
-  /* 14 结尾 */
-  outro(lt, dur){
-    op('sc-outro', fi(lt,.6)); hideCursor(); op('ring',0);
-    op('o-url', ease(seg(lt,.6,1.6)));
-    op('o-star', ease(seg(lt,2.0,3.0)));
-    return FOCUS(960, 540, lerp(1.06,1.0, ease(seg(lt,0,1.8))));
-  }
 };
 
 const SCENE_EL = {
-  title:'sc-title', problem:'sc-problem', concept:'sc-concept', intro:'sc-intro',
-  safety:'sc-safety', launch:'sc-app', 'app-repo':'sc-app', 'app-scan':'sc-app',
-  'app-list':'sc-app', 'app-confirm':'sc-app', 'app-result':'sc-app',
-  'app-restore':'sc-app', tech:'sc-tech', outro:'sc-outro'
+  title:'sc-title', problem:'sc-problem', entry:'sc-entry', orgtab:'sc-orgtab',
+  orgscan:'sc-orgscan', orgconfirm:'sc-orgconfirm', orgexec:'sc-orgexec',
+  dupconcept:'sc-dupconcept', dupscan:'sc-dupscan', dupdelete:'sc-dupdelete',
+  safety:'sc-safety', outro:'sc-outro'
 };
 
 /* ==================== 主渲染 ==================== */
@@ -821,38 +743,30 @@ function renderAt(t){
   if(!TL) return;
   const shots = TL.shots;
   let cur = shots[0], idx = 0;
-  for(let i=0;i<shots.length;i++){
-    if(t >= shots[i].start){ cur = shots[i]; idx = i; }
-  }
+  for(let i=0;i<shots.length;i++){ if(t >= shots[i].start){ cur = shots[i]; idx = i; } }
   const lt = t - cur.start;
 
-  /* 切场景：隐藏其它，显示当前 */
-  for(const k in SCENE_EL){ op(k.indexOf('-')>=0 && k!=='sc-app' ? SCENE_EL[k] : SCENE_EL[k], 0); }
   const curEl = SCENE_EL[cur.id];
-  /* 当前场景的 opacity 由各自的 builder 控制，这里只确保其它为 0 */
   for(const k in SCENE_EL){
     const eid = SCENE_EL[k];
-    if(eid !== curEl) op(eid, 0);
+    op(eid, eid === curEl ? 1 : 0);
   }
-  if(cur.id === 'tech') op('sc-app', 0);
 
   const fn = SCENES[cur.id];
   let cam = FOCUS(960,540,1);
   if(fn) cam = fn(lt, cur.dur) || cam;
   applyCam(cam);
 
-  /* 字幕 */
   if(_capShot !== cur.id){ _capShot = cur.id; _caps = capSplit(cur.narration, cur.dur); }
   let capText = "";
   for(const c of _caps){ if(lt >= c.t0 && lt < c.t1){ capText = c.text; break; } }
   if(!capText && _caps.length) capText = _caps[_caps.length-1].text;
   const capEl = $('cap');
   if(capEl.textContent !== capText) capEl.textContent = capText;
-  const capOn = ease(seg(lt, 0, .35)) * (lt > cur.dur-0.05 ? 0 : 1);
+  const capOn = ease(seg(lt,0,.35)) * (lt > cur.dur-0.05 ? 0 : 1);
   capEl.style.opacity = capOn.toFixed(3);
   capEl.style.transform = `translateY(${((1-capOn)*8).toFixed(1)}px)`;
 
-  /* HUD */
   op('hud', ease(seg(lt,0,.5)));
   txt('hud-tag', cur.label);
   txt('hud-t', `${t.toFixed(1)}s / ${TL.total.toFixed(1)}s`);
@@ -862,40 +776,18 @@ function renderAt(t){
 /* ==================== 引导 ==================== */
 function boot(){
   buildStatic();
-  /* 先全部隐藏一遍，避免首帧闪现 */
-  ['sc-title','sc-problem','sc-concept','sc-intro','sc-safety','sc-app','sc-tech','sc-outro']
-    .forEach(id=>op(id,0));
-  op('ring',0); op('modal',0); hideCursor(); op('cap',0); op('hud',0);
-
-  const q = new URLSearchParams(location.search);
-  if(q.has('t')){ renderAt(parseFloat(q.get('t'))); return; }
-
-  if(!TL){
-    /* 独立预览：尝试读取同目录 timeline.json */
-    fetch('timeline.json').then(r=>r.json()).then(d=>{
-      TL = d; renderAt(0);
-      if(q.get('play') === '1') startPlay();
-    }).catch(()=>{ renderAt(0); });
-  } else {
-    renderAt(0);
-    if(q.get('play') === '1') startPlay();
-  }
+  for(const k in SCENE_EL) op(SCENE_EL[k], 0);
+  op('cursor', 0); op('modal', 0); op('hud', 0); op('cap', 0);
+  renderAt(0);
+  window.__READY = true;
 }
 
-function startPlay(){
-  const t0 = performance.now();
-  function step(){
-    const t = (performance.now()-t0)/1000;
-    if(t > TL.total) return;
-    renderAt(t);
-    requestAnimationFrame(step);
-  }
-  requestAnimationFrame(step);
+if(window.__TLDATA){
+  boot();
+}else{
+  fetch('timeline.json').then(r=>r.json()).then(d=>{ TL=d; boot(); })
+    .catch(e=>{ document.title = 'TL load failed: '+e; });
 }
-
-window.renderAt = renderAt;
-window.__setTL = d => { TL = d; };
-boot();
 </script>
 </body>
 </html>

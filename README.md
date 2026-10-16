@@ -73,6 +73,19 @@ PowerShell `Shell.Application` 的 delete 动词），删不掉就放弃而不�
 
 ---
 
+## 🎬 视频介绍
+
+| 视频 | 内容 | 时长 |
+| --- | --- | --- |
+| `md-video/out/comfy-mapper-tutorial.mp4` | 完整教程：原理、映射、还原、安全机制 | 3 分 06 秒 |
+| `md-video/out/comfy-mapper-v1.1-update.mp4` | **v1.1 更新**：整理入库 + 模型查重 | 2 分 48 秒 |
+
+两个视频都是 1080p24，中文配音 + 字幕，工程文件（分镜脚本 / 播放器 /
+渲染管线）在 [`md-video/`](md-video/) 目录，标题与简介文案见
+[`md-video/标题与简介.md`](md-video/标题与简介.md)。
+
+---
+
 ## 为什么需要它
 
 装了多个 ComfyUI 整合包（不同 CUDA 版本、不同插件环境）时，
